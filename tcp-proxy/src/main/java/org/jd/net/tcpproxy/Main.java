@@ -23,17 +23,21 @@ public class Main {
      * -Dio.netty.leakDetectionLevel=disabled 禁用监控
      */
     public static void main(String[] a) throws FileNotFoundException {
-        URL resource = Main.class.getResource("");
         File file = new File("tcp-proxy.conf");
         if (!file.isFile()) {
-            logger.info("未找到配置文件 {}", file.getAbsolutePath());
-            return;
+            URL url = Main.class.getClassLoader().getResource("tcp-proxy.conf");
+            if (url != null)
+                file = new File(url.getFile());
+            if(!file.isFile()){
+                logger.info("未找到配置文件 {}", file.getAbsolutePath());
+                return;
+            }
         }
         BufferedReader reader = new BufferedReader(new FileReader(file));
         reader.lines().forEach(line -> {
             String[] s = line.split(" ");
             if (s.length == 3)
-                start(Integer.valueOf(s[1]), s[1], Integer.valueOf(s[2]));
+                start(Integer.valueOf(s[0]), s[1], Integer.valueOf(s[2]));
         });
     }
 
