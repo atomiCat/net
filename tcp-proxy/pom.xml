@@ -9,7 +9,7 @@
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
-    <artifactId>tcp-reverse-proxy</artifactId>
+    <artifactId>tcp-proxy</artifactId>
     <dependencies>
         <dependency>
             <groupId>org.jd</groupId>

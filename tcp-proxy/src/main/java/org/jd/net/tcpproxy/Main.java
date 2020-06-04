@@ -1,4 +1,4 @@
-package org.jd.net.tcpRP;
+package org.jd.net.tcpproxy;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandler;
@@ -9,6 +9,7 @@ import org.jd.net.core.Connector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.util.function.Supplier;
 
 public class Main {
@@ -19,10 +20,13 @@ public class Main {
      * -Dio.netty.leakDetectionLevel=disabled 禁用监控
      */
     public static void main(String[] a) {
-        start(2000, "172.16.2.70", 8085);
+        File file = new File("");
+        logger.info(file.getAbsolutePath());
+//        start(2000, "172.16.2.70", 8085);
     }
 
     private static void start(int listenPort, String host, int port) {
+        logger.info("tcp 反向代理");
         new Acceptor(listenPort, new Supplier<ChannelHandler[]>() {
             @Override
             public ChannelHandler[] get() {
