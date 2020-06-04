@@ -20,13 +20,13 @@ public class Main {
      * -Dio.netty.leakDetectionLevel=disabled 禁用监控
      */
     public static void main(String[] a) {
-        File file = new File("");
+        File file = new File("tcp-proxy.conf");
         logger.info(file.getAbsolutePath());
 //        start(2000, "172.16.2.70", 8085);
     }
 
     private static void start(int listenPort, String host, int port) {
-        logger.info("tcp 反向代理");
+        logger.info("启动tcp代理：{} --> {}:{}", listenPort, host, port);
         new Acceptor(listenPort, new Supplier<ChannelHandler[]>() {
             @Override
             public ChannelHandler[] get() {
@@ -49,13 +49,12 @@ public class Main {
 
                                                     @Override
                                                     public void channelInactive(ChannelHandlerContext ctx) throws Exception {
-                                                        super.channelInactive(ctx);
                                                         client.close();
                                                     }
 
                                                     @Override
                                                     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
-                                                        logger.info("client <-- target : {}", ((ByteBuf) msg).readableBytes());
+//                                                        logger.info("client <-- target : {}", ((ByteBuf) msg).readableBytes());
                                                         client.writeAndFlush(msg);
                                                     }
                                                 }
@@ -73,13 +72,12 @@ public class Main {
 
                             @Override
                             public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
-                                logger.info("client --> target : {}", ((ByteBuf) msg).readableBytes());
+//                                logger.info("client --> target : {}", ((ByteBuf) msg).readableBytes());
                                 target.channel().writeAndFlush(msg);
                             }
                         }
                 };
             }
         }).run();
-
     }
 }
