@@ -28,7 +28,7 @@ public class Connector implements Runnable {
 
     @Override
     public void run() {
-        EventLoopGroup workerGroup = new NioEventLoopGroup();
+        EventLoopGroup workerGroup = new NioEventLoopGroup(1);
         try {
             Bootstrap b = new Bootstrap(); // (1)
             b.group(workerGroup); // (2)
@@ -49,7 +49,7 @@ public class Connector implements Runnable {
         } catch (InterruptedException e) {
             logger.error("", e);
         } finally {
-            logger.info("Connector closed {}:{}", host, port);
+            logger.info("Connector shutdownGracefully {}:{}", host, port);
             workerGroup.shutdownGracefully();
         }
     }

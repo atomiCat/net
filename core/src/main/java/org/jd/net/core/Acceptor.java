@@ -48,6 +48,7 @@ public class Acceptor implements Runnable {
         } finally {
             workerGroup.shutdownGracefully();
             bossGroup.shutdownGracefully();
+            logger.info("Acceptor shutdownGracefully port:", port);
         }
     }
 
