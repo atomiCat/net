@@ -23,13 +23,15 @@ public class Main {
      * -Dio.netty.leakDetectionLevel=disabled 禁用监控
      */
     public static void main(String[] a) throws IOException {
-        File file = new File("tcp-proxy.conf");
+        File file = new File(a.length > 0 ? a[0] : "tcp-proxy.conf");
         if (!file.isFile()) {
+            //开发环境
             URL url = Main.class.getClassLoader().getResource("tcp-proxy.conf");
             if (url != null)
                 file = new File(url.getFile());
+
             if (!file.isFile()) {
-                logger.info("未找到配置文件 {}", file.getAbsolutePath());
+                logger.info("未找到配置文件");
                 return;
             }
         }
