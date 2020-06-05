@@ -11,6 +11,7 @@
     <modules>
         <module>tcp-proxy</module>
         <module>core</module>
+        <module>http-proxy</module>
     </modules>
 
     <dependencies>

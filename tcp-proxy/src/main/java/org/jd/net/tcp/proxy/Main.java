@@ -1,10 +1,8 @@
 package org.jd.net.tcp.proxy;
 
-import io.netty.channel.ChannelHandler;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelInboundHandlerAdapter;
-import org.jd.net.core.Acceptor;
-import org.jd.net.core.Connector;
+import io.netty.channel.*;
+import org.jd.net.core.DuplexTransfer;
+import org.jd.net.core.Netty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -13,7 +11,6 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.net.URL;
-import java.util.function.Supplier;
 
 public class Main {
     static Logger logger = LoggerFactory.getLogger(Main.class);
@@ -51,54 +48,13 @@ public class Main {
         reader.close();
     }
 
-    private static void start(int listenPort, String host, int port) {
+    private static ChannelFuture start(int listenPort, String host, int port) {
         logger.info("启动tcp代理：{} --> {}:{}", listenPort, host, port);
-        new Thread(new Acceptor(listenPort, () -> new ChannelInboundHandlerAdapter[]{
-                new ChannelInboundHandlerAdapter() {
-                    private volatile Connector target;//被代理的目标
-
-                    @Override
-                    public void channelActive(ChannelHandlerContext client) throws Exception {
-                        client.channel().config().setAutoRead(false);//暂停读取
-                        target = new Connector(host, port, new Supplier<ChannelHandler[]>() {
-                            @Override
-                            public ChannelHandler[] get() {
-                                return new ChannelInboundHandlerAdapter[]{
-                                        new ChannelInboundHandlerAdapter() {
-                                            @Override
-                                            public void channelActive(ChannelHandlerContext ctx) throws Exception {
-                                                client.channel().config().setAutoRead(true);//恢复读取
-                                            }
-
-                                            @Override
-                                            public void channelInactive(ChannelHandlerContext ctx) throws Exception {
-                                                client.close();
-                                            }
-
-                                            @Override
-                                            public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
-//                                                        logger.info("client <-- target : {}", ((ByteBuf) msg).readableBytes());
-                                                client.writeAndFlush(msg);
-                                            }
-                                        }
-                                };
-                            }
-                        });
-                        new Thread(target).start();
-                    }
-
-                    @Override
-                    public void channelInactive(ChannelHandlerContext ctx) throws Exception {
-                        if (target != null)
-                            target.close();
-                    }
-
-                    @Override
-                    public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
-//                                logger.info("client --> target : {}", ((ByteBuf) msg).readableBytes());
-                        target.channel().writeAndFlush(msg);
-                    }
-                }
-        })).start();
+        return Netty.accept(listenPort, new ChannelInitializer<Channel>() {
+            @Override
+            protected void initChannel(Channel ch) throws Exception {
+                ch.pipeline().addLast(new DuplexTransfer(host, port));
+            }
+        });
     }
 }
