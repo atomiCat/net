@@ -53,6 +53,7 @@ public class Main {
         return Netty.accept(listenPort, new ChannelInitializer<Channel>() {
             @Override
             protected void initChannel(Channel ch) throws Exception {
+                logger.info("accepted {} = {}", listenPort, ch.remoteAddress());
                 ch.pipeline().addLast(new DuplexTransfer(host, port));
             }
         });

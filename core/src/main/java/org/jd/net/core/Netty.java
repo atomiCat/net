@@ -15,6 +15,7 @@ public class Netty {
     private static Logger logger = LoggerFactory.getLogger(Netty.class);
 
     public static ChannelFuture connect(String host, int port, ChannelHandler channelHandler) {
+        logger.info("connect {}:{}", host, port);
         EventLoopGroup workerGroup = new NioEventLoopGroup(1);
         Bootstrap b = new Bootstrap(); // (1)
         b.group(workerGroup); // (2)
@@ -36,6 +37,7 @@ public class Netty {
     }
 
     public static ChannelFuture accept(int port, ChannelHandler childHandler) {
+
         EventLoopGroup bossGroup = new NioEventLoopGroup(1); // (1)
         EventLoopGroup workerGroup = new NioEventLoopGroup();
         ServerBootstrap b = new ServerBootstrap(); // (2)

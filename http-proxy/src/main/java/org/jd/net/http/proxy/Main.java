@@ -1,5 +1,10 @@
 package org.jd.net.http.proxy;
 
+import io.netty.channel.Channel;
+import io.netty.channel.ChannelInitializer;
+import org.jd.net.core.DuplexTransfer;
+import org.jd.net.core.Netty;
+
 public class Main {
     public static void main(String[] a) {
         if ("-s".equalsIgnoreCase(a[0])) {// -s port password
@@ -10,18 +15,21 @@ public class Main {
     }
 
     static void clientStart(int port, String sHost, int sPort, byte password) {
+        Netty.accept(port, new ChannelInitializer<Channel>() {
+            @Override
+            protected void initChannel(Channel ch) throws Exception {
+                ch.pipeline().addLast(new DuplexTransfer(sHost, sPort));
+            }
+        }).syncUninterruptibly().channel().closeFuture().syncUninterruptibly();
 
-//        new Acceptor(port, () -> new ChannelHandler[]{
-//                new ChannelInboundHandlerAdapter() {
-//                    @Override
-//                    public void channelActive(ChannelHandlerContext browser) throws Exception {
-//
-//                    }
-//                }
-//        });
     }
 
     static void serverStart(int port, byte password) {
-
+        Netty.accept(port, new ChannelInitializer<Channel>() {
+            @Override
+            protected void initChannel(Channel ch) throws Exception {
+                ch.pipeline().addLast();
+            }
+        }).syncUninterruptibly().channel().closeFuture().syncUninterruptibly();
     }
 }
