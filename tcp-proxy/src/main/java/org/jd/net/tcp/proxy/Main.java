@@ -53,7 +53,7 @@ public class Main {
 
     private static void start(int listenPort, String host, int port) {
         logger.info("启动tcp代理：{} --> {}:{}", listenPort, host, port);
-        new Acceptor(listenPort, () -> new ChannelInboundHandlerAdapter[]{
+        new Thread(new Acceptor(listenPort, () -> new ChannelInboundHandlerAdapter[]{
                 new ChannelInboundHandlerAdapter() {
                     private volatile Connector target;//被代理的目标
 
@@ -99,6 +99,6 @@ public class Main {
                         target.channel().writeAndFlush(msg);
                     }
                 }
-        }).run();
+        })).start();
     }
 }
