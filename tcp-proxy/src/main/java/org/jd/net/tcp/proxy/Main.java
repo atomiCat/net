@@ -33,6 +33,7 @@ public class Main {
                 return;
             }
         }
+        logger.info("配置文件：{}", file.getAbsolutePath());
         BufferedReader reader = new BufferedReader(new FileReader(file));
         reader.lines().forEach(line -> {
             if (line.length() == 0)
@@ -60,7 +61,7 @@ public class Main {
                         target = new Connector(host, port, new Supplier<ChannelHandler[]>() {
                             @Override
                             public ChannelHandler[] get() {
-                                return  new ChannelInboundHandlerAdapter[]{
+                                return new ChannelInboundHandlerAdapter[]{
                                         new ChannelInboundHandlerAdapter() {
                                             @Override
                                             public void channelActive(ChannelHandlerContext ctx) throws Exception {
