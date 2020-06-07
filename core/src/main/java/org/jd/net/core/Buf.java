@@ -12,11 +12,11 @@ public class Buf {
     static Logger logger = LoggerFactory.getLogger(Buf.class);
     public static ByteBufAllocator alloc = PooledByteBufAllocator.DEFAULT;
 
-    public static void print(String title,ByteBuf buf) {
+    public static void print(String title, ByteBuf buf) {
         byte[] bytes = new byte[buf.readableBytes()];
         buf.getBytes(buf.readerIndex(), bytes);
 //        logger.info("buf {} 内容：{}",title,bytes);
-        logger.info("buf {} 内容：{}",title,new String(bytes));
+        logger.info("buf {} 内容：{}", title, new String(bytes));
     }
 
     public static ByteBuf alloc(int maxSize) {
@@ -31,9 +31,9 @@ public class Buf {
         int size = 0;
         for (CharSequence c : s)
             size += c.length();
-        ByteBuf buf = alloc.buffer(size, size * 4);
+        ByteBuf buf = alloc.buffer(size);
         for (CharSequence c : s)
-            buf.writeCharSequence(c, StandardCharsets.UTF_8);
+            buf.writeCharSequence(c, StandardCharsets.US_ASCII);
         return buf;
     }
 
