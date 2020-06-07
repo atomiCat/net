@@ -6,6 +6,7 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import org.apache.commons.lang3.StringUtils;
 import org.jd.net.core.Buf;
+import org.jd.net.core.DuplexTransfer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -88,10 +89,11 @@ public class HttpProxyService extends ChannelInboundHandlerAdapter {
                     dataToServer.add(Buf.wrap(split[0], " ", url.substring(i + 1), " ", split[2]));
                 }
                 break;
-            case connect:
+            case connect://忽略剩余请求头
                 if (lineLength == 2) {//CRLF 2字节
                     state = State.body;
                 }
+                buffer.clear();
                 break;
             case http://将请求头 Proxy- 开头的去掉 "Proxy-" 前缀
                 if (lineLength > 2) {//处理请求头
@@ -111,7 +113,10 @@ public class HttpProxyService extends ChannelInboundHandlerAdapter {
                 break;
         }
         if (state == State.body) {
-
+            if (buffer.isReadable())
+                dataToServer.add(buffer.slice());
+            browser.pipeline().addLast(new DuplexTransfer(host, port));
+            logger.info("added DuplexTransfer");
         }
     }
 
@@ -120,7 +125,7 @@ public class HttpProxyService extends ChannelInboundHandlerAdapter {
         if (state == State.body) {
             ctx.fireChannelRead(msg);
         } else {
-            decode(ctx, (ByteBuf) msg);
+            decodeLine(ctx, (ByteBuf) msg);
         }
     }
 
