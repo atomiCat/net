@@ -1,13 +1,10 @@
 package org.jd.net.core;
 
-import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.util.List;
 
 public class DuplexTransfer extends ChannelInboundHandlerAdapter {
     private static final Logger logger = LoggerFactory.getLogger(DuplexTransfer.class);
@@ -47,9 +44,12 @@ public class DuplexTransfer extends ChannelInboundHandlerAdapter {
         ctx.fireChannelActive();
     }
 
+    ChannelHandlerContext hostPort;
+
     @Override
     public void channelInactive(ChannelHandlerContext ctx) throws Exception {
-
+        if (hostPort != null && hostPort.channel().isActive())
+            hostPort.close();
     }
 
     private void connect(ChannelHandlerContext ctx) {
@@ -63,6 +63,7 @@ public class DuplexTransfer extends ChannelInboundHandlerAdapter {
                         new ChannelInboundHandlerAdapter() {
                             @Override
                             public void channelActive(ChannelHandlerContext hostPort) throws Exception {
+                                DuplexTransfer.this.hostPort = hostPort;
                                 ctx.pipeline().addLast(new Transfer(hostPort));//ctx数据复制到hostPort
                                 ctx.channel().config().setAutoRead(true);
                                 hostPort.fireChannelActive();

@@ -1,7 +1,6 @@
 package org.jd.net.http.proxy;
 
 import io.netty.buffer.ByteBuf;
-import io.netty.buffer.CompositeByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import org.apache.commons.lang3.StringUtils;
@@ -29,7 +28,6 @@ import java.util.ArrayList;
  */
 public class HttpProxyService extends SplitHandler {
     static final Logger logger = LoggerFactory.getLogger(HttpProxyService.class);
-    private static final byte[] CRLF = new byte[]{'\r', '\n'};
 
     public HttpProxyService() {
         super("\r\n");
@@ -43,7 +41,6 @@ public class HttpProxyService extends SplitHandler {
 
     private enum State {init, connect, http, body}
 
-    private CompositeByteBuf bufs;
     private ArrayList<ByteBuf> dataToServer = new ArrayList<>();//要发往服务端的数据
     private String host;
     private int port;
@@ -54,6 +51,8 @@ public class HttpProxyService extends SplitHandler {
         switch (state) {
             case init://解析 host port
                 String line = Buf.readString(frame);
+                frame.release();
+                logger.info(line);
                 String[] split = StringUtils.split(line, " ");
                 if (split[0].equals("CONNECT")) {// CONNECT www.qq.com:443 HTTP/1.1\r\n
                     state = State.connect;
@@ -66,14 +65,15 @@ public class HttpProxyService extends SplitHandler {
                     int i = url.indexOf('/', 7);//端口后面的斜线的坐标
                     setServerAddr(url.substring(7, i), 80);//www.qq.com:80
                     //转换为 GET /index.html HTTP/1.1\r\n
-                    dataToServer.add(Buf.wrap(split[0], " ", url.substring(i + 1), " ", split[2]));
+                    dataToServer.add(Buf.wrap(split[0], " ", url.substring(i), " ", split[2]));
                 }
                 break;
             case connect://忽略剩余请求头
                 if (frame.readableBytes() == 2) {//CRLF 2字节
                     state = State.body;
                 }
-                frame.release();
+//                logger.info("connect head: {}", Buf.readString(frame));
+                frame.clear().release();
                 break;
             case http://将请求头 Proxy- 开头的去掉 "Proxy-" 前缀
                 if (frame.readableBytes() > 2) {//处理请求头
@@ -92,33 +92,51 @@ public class HttpProxyService extends SplitHandler {
                 break;
         }
         if (state == State.body) {//剩余数据发送到服务端
+            dataToServer.add(remains.retainedSlice());
+            remains.clear().release();
 
             ctx.channel().config().setAutoRead(false);//停止自动读，等连接到服务端后再继续读
-            if (frame.isReadable())
-                dataToServer.add(frame.slice());
             ctx.pipeline().addLast(new DuplexTransfer(host, port, ChannelEvent.handlerAdded,
                     new ChannelInboundHandlerAdapter() {
                         @Override
                         public void channelActive(ChannelHandlerContext ctx) throws Exception {
                             dataToServer.forEach(ctx::write);
-                            if (remains.isReadable())
-                                ctx.write(remains);
                             ctx.flush();
-
                             dataToServer = null;
                             super.channelActive(ctx);
                         }
+
+//                        @Override
+//                        public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+//                            Buf.print("<=============", (ByteBuf) msg);
+//                            super.channelRead(ctx, msg);
+//                        }
+
+//                        @Override
+//                        public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+//                            logger.error("======exceptionCaught=======",cause);
+//                            super.exceptionCaught(ctx, cause);
+//                        }
                     }));
         }
     }
 
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+//        Buf.print("channelRead===", (ByteBuf) msg);
         if (state == State.body) {
             ctx.fireChannelRead(msg);
         } else {
-            super.channelRead(ctx, msg);
+            split(ctx, (ByteBuf) msg);
         }
+    }
+
+    @Override
+    public void channelInactive(ChannelHandlerContext ctx) throws Exception {
+        if (dataToServer != null)
+            dataToServer.forEach(ByteBuf::release);
+        System.gc();
+        super.channelInactive(ctx);
     }
 
     /**
@@ -131,4 +149,8 @@ public class HttpProxyService extends SplitHandler {
         port = split.length == 2 ? Integer.valueOf(split[1]) : defaultPort;
     }
 
+    @Override
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+        ctx.close();
+    }
 }
