@@ -6,7 +6,9 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import org.apache.commons.lang3.StringUtils;
 import org.jd.net.core.Buf;
+import org.jd.net.core.ChannelEvent;
 import org.jd.net.core.DuplexTransfer;
+import org.jd.net.core.SplitHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -25,9 +27,14 @@ import java.util.ArrayList;
  * Proxy-Connection: Keep-Alive
  * User-Agent: Apache-HttpClient/4.5.6 (Java/1.8.0_181)
  */
-public class HttpProxyService extends ChannelInboundHandlerAdapter {
+public class HttpProxyService extends SplitHandler {
     static final Logger logger = LoggerFactory.getLogger(HttpProxyService.class);
     private static final byte[] CRLF = new byte[]{'\r', '\n'};
+
+    public HttpProxyService() {
+        super("\r\n");
+    }
+
     /**
      * https: init -> connect -> body
      * http:  init -> http -> body
@@ -41,44 +48,17 @@ public class HttpProxyService extends ChannelInboundHandlerAdapter {
     private String host;
     private int port;
 
-    protected void decodeLine(ChannelHandlerContext browser, ByteBuf buffer) throws Exception {
-        int LF = buffer.indexOf(buffer.readerIndex(), buffer.writerIndex(), CRLF[1]);
-        assert buffer.getByte(LF - 1) == CRLF[0];
-        int lineLength = LF - buffer.readerIndex() + 1;
-
-        if (LF < 0) {//此次读取没有回车换行符
-            (bufs == null ? (bufs = Buf.alloc.compositeBuffer()) : bufs).addComponent(true, buffer);
-            return;
-        } else {
-            if (bufs == null) {
-                dealLine(browser, buffer, lineLength);
-            } else {
-                bufs.addComponent(true, buffer.slice(buffer.readerIndex(), lineLength));
-                buffer.readerIndex(LF + 1);
-                dealLine(browser, bufs, bufs.readableBytes());
-                bufs.release();
-                bufs = null;
-            }
-        }
-
-        if (buffer.isReadable()) {
-            decodeLine(browser, buffer);
-        } else {
-            buffer.release();
-        }
-
-    }
-
-    protected void dealLine(ChannelHandlerContext browser, ByteBuf buffer, int lineLength) throws Exception {
+    @Override
+    protected void decodeFrame(ChannelHandlerContext ctx, ByteBuf frame, ByteBuf remains) throws Exception {
 
         switch (state) {
             case init://解析 host port
-                String line = buffer.readCharSequence(lineLength, StandardCharsets.US_ASCII).toString();
+                String line = Buf.readString(frame);
                 String[] split = StringUtils.split(line, " ");
                 if (split[0].equals("CONNECT")) {// CONNECT www.qq.com:443 HTTP/1.1\r\n
                     state = State.connect;
                     //先告诉客户端连接成功，再进行连接,避免数据等待
-                    browser.writeAndFlush(Buf.wrap("HTTP/1.1 200 Connection Established \r\n\r\n"));
+                    ctx.writeAndFlush(Buf.wrap("HTTP/1.1 200 Connection Established \r\n\r\n"));
                     setServerAddr(split[1], 443);
                 } else {// GET http://www.qq.com:80/index.html HTTP/1.1\r\n
                     state = State.http;
@@ -90,33 +70,45 @@ public class HttpProxyService extends ChannelInboundHandlerAdapter {
                 }
                 break;
             case connect://忽略剩余请求头
-                if (lineLength == 2) {//CRLF 2字节
+                if (frame.readableBytes() == 2) {//CRLF 2字节
                     state = State.body;
                 }
-                buffer.clear();
+                frame.release();
                 break;
             case http://将请求头 Proxy- 开头的去掉 "Proxy-" 前缀
-                if (lineLength > 2) {//处理请求头
-                    if (lineLength < 34) {//跳过太长的请求头，因为请求头太长一般不会以 "Proxy-" 开头
-                        String prefix = buffer.getCharSequence(buffer.readerIndex(), "Proxy-".length(), StandardCharsets.US_ASCII).toString();
+                if (frame.readableBytes() > 2) {//处理请求头
+                    if (frame.readableBytes() < 34) {//跳过太长的请求头，因为请求头太长一般不会以 "Proxy-" 开头
+                        String prefix = frame.getCharSequence(frame.readerIndex(), "Proxy-".length(), StandardCharsets.US_ASCII).toString();
                         if (prefix.equalsIgnoreCase("Proxy-")) {//处理Proxy-开头的请求头，例如 Proxy-Connection: Keep-Alive 转为 Connection: Keep-Alive
-                            buffer.readerIndex(buffer.readerIndex() + "Proxy-".length());
-                            lineLength -= "Proxy-".length();
-                            Buf.print("请求头转换后", buffer);
+                            frame.readerIndex(frame.readerIndex() + "Proxy-".length());
+                            Buf.print("请求头转换后", frame);
                         }
                     }
-                    dataToServer.add(buffer.slice(buffer.readerIndex(), lineLength));
-                    buffer.readerIndex(buffer.readerIndex() + lineLength);
-                } else {
+                    dataToServer.add(frame);
+                } else {//\r\n
+                    dataToServer.add(frame);//\r\n
                     state = State.body;
                 }
                 break;
         }
-        if (state == State.body) {
-            if (buffer.isReadable())
-                dataToServer.add(buffer.slice());
-            browser.pipeline().addLast(new DuplexTransfer(host, port));
-            logger.info("added DuplexTransfer");
+        if (state == State.body) {//剩余数据发送到服务端
+
+            ctx.channel().config().setAutoRead(false);//停止自动读，等连接到服务端后再继续读
+            if (frame.isReadable())
+                dataToServer.add(frame.slice());
+            ctx.pipeline().addLast(new DuplexTransfer(host, port, ChannelEvent.handlerAdded,
+                    new ChannelInboundHandlerAdapter() {
+                        @Override
+                        public void channelActive(ChannelHandlerContext ctx) throws Exception {
+                            dataToServer.forEach(ctx::write);
+                            if (remains.isReadable())
+                                ctx.write(remains);
+                            ctx.flush();
+
+                            dataToServer = null;
+                            super.channelActive(ctx);
+                        }
+                    }));
         }
     }
 
@@ -125,24 +117,8 @@ public class HttpProxyService extends ChannelInboundHandlerAdapter {
         if (state == State.body) {
             ctx.fireChannelRead(msg);
         } else {
-            decodeLine(ctx, (ByteBuf) msg);
+            super.channelRead(ctx, msg);
         }
-    }
-
-    @Override
-    public void channelInactive(ChannelHandlerContext client) throws Exception {
-        Message.flush(server, Message.Close, Buf.wrap(context.id));
-        logger.info("管道关闭 channelInactive id={} targetAddr={}:{}", context.id, context.targetHost, context.targetPort);
-        map.remove(context.id).close();// map.remove 只在channelInactive调用即可
-        super.channelInactive(client);
-    }
-
-    @Override
-    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
-        logger.error("ClientAcceptor 异常", cause);
-        if (ctx.channel().isActive())
-            ctx.close();
-        super.exceptionCaught(ctx, cause);
     }
 
     /**
@@ -155,19 +131,4 @@ public class HttpProxyService extends ChannelInboundHandlerAdapter {
         port = split.length == 2 ? Integer.valueOf(split[1]) : defaultPort;
     }
 
-    /**
-     * @param host        www.qq.com 或 www.qq.com:80
-     * @param defaultPort 默认端口
-     */
-    private void serverConnect(String host, int defaultPort) throws InterruptedException {
-        String[] split = StringUtils.split(":");
-        if (split.length == 2) {
-            host = split[0];
-            defaultPort = Integer.valueOf(split[1]);
-        }
-
-        ByteBuf data = Buf.alloc.buffer().writeInt(context.id).writeInt(Message.Connect).writeInt(defaultPort);
-        data.writeCharSequence(host, StandardCharsets.UTF_8);//host`
-        Message.flush(server, Message.ConnectSend, data);//通知server端连接目标主机
-    }
 }

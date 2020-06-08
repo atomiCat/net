@@ -1,60 +1,79 @@
 package org.jd.net.core;
 
+import io.netty.buffer.ByteBuf;
+import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.List;
+
 public class DuplexTransfer extends ChannelInboundHandlerAdapter {
     private static final Logger logger = LoggerFactory.getLogger(DuplexTransfer.class);
     private final String host;
     private final int port;
+    private final ChannelEvent connectOn;
+    private final ChannelHandler[] hostPortHandler;
 
-    public DuplexTransfer(String host, int port) {
+    /**
+     * @param host      host
+     * @param port      port
+     * @param connectOn 连接host:port的时机,only handlerAdded or channelActive
+     */
+    public DuplexTransfer(String host, int port, ChannelEvent connectOn, ChannelHandler... hostPortHandler) {
         this.host = host;
         this.port = port;
+        assert connectOn == ChannelEvent.handlerAdded || connectOn == ChannelEvent.channelActive;
+        this.connectOn = connectOn;
+        this.hostPortHandler = hostPortHandler;
+    }
+
+    public DuplexTransfer(String host, int port) {
+        this(host, port, ChannelEvent.channelActive);
     }
 
     @Override
     public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
-        logger.info("setAutoRead(false)");
-        ctx.channel().config().setAutoRead(false);//暂停自动读取
-        if (ctx.channel().isActive()) {
+        if (connectOn == ChannelEvent.handlerAdded)
             connect(ctx);
-        }
+        super.handlerAdded(ctx);
     }
 
     @Override
     public void channelActive(ChannelHandlerContext ctx) throws Exception {
-        connect(ctx);
+        if (connectOn == ChannelEvent.channelActive)
+            connect(ctx);
         ctx.fireChannelActive();
     }
 
-    private boolean connected;
+    @Override
+    public void channelInactive(ChannelHandlerContext ctx) throws Exception {
+
+    }
 
     private void connect(ChannelHandlerContext ctx) {
-        if (connected)
-            throw new IllegalStateException("重复 connect");
-        connected = true;
-
         Netty.connect(host, port, new ChannelInboundHandlerAdapter() {
             @Override
-            public void channelRegistered(ChannelHandlerContext connected) throws Exception {
-                connected.pipeline().addLast(
-                        new Transfer(ctx),
+            public void channelRegistered(ChannelHandlerContext hostPort) throws Exception {
+                if (hostPortHandler != null)
+                    hostPort.pipeline().addLast(hostPortHandler);
+
+                hostPort.pipeline().addLast(
                         new ChannelInboundHandlerAdapter() {
                             @Override
-                            public void channelActive(ChannelHandlerContext connected) throws Exception {
-                                ctx.pipeline().addLast(new Transfer(connected));
+                            public void channelActive(ChannelHandlerContext hostPort) throws Exception {
+                                ctx.pipeline().addLast(new Transfer(hostPort));//ctx数据复制到hostPort
                                 ctx.channel().config().setAutoRead(true);
-                                super.channelActive(connected);
+                                hostPort.fireChannelActive();
                             }
-                        }
+                        },
+                        new Transfer(ctx)//hostPort数据复制到ctx
                 );
             }
         }).addListener(future -> {
             if (!future.isSuccess())
-                ctx.close();//连接失败，关闭client
-        }).syncUninterruptibly();
+                ctx.close();//连接失败，关闭
+        });
     }
 }
