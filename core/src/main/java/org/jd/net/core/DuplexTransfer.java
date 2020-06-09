@@ -1,11 +1,20 @@
 package org.jd.net.core;
 
+import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+
+/**
+ * 双向复制
+ * 需要与 ctx.channel().config().setAutoRead(false) 配合使用
+ *
+ * @see #stopAutoRead(Channel)
+ */
 public class DuplexTransfer extends ChannelInboundHandlerAdapter {
     private static final Logger logger = LoggerFactory.getLogger(DuplexTransfer.class);
     private final String host;
@@ -52,6 +61,13 @@ public class DuplexTransfer extends ChannelInboundHandlerAdapter {
             hostPort.close();
     }
 
+    @Override
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+        if (cause instanceof IOException)
+            ctx.close();
+        else logger.error("", cause);
+    }
+
     private void connect(ChannelHandlerContext ctx) {
         Netty.connect(host, port, new ChannelInboundHandlerAdapter() {
             @Override
@@ -68,6 +84,11 @@ public class DuplexTransfer extends ChannelInboundHandlerAdapter {
                                 ctx.channel().config().setAutoRead(true);
                                 hostPort.fireChannelActive();
                             }
+
+                            @Override
+                            public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+                                DuplexTransfer.this.exceptionCaught(ctx, cause);
+                            }
                         },
                         new Transfer(ctx)//hostPort数据复制到ctx
                 );
@@ -76,5 +97,15 @@ public class DuplexTransfer extends ChannelInboundHandlerAdapter {
             if (!future.isSuccess())
                 ctx.close();//连接失败，关闭
         });
+    }
+
+    /**
+     * 停止自动读取
+     *
+     * @return this
+     */
+    public DuplexTransfer stopAutoRead(Channel channel) {
+        channel.config().setAutoRead(false);
+        return this;
     }
 }

@@ -54,7 +54,7 @@ public class Main {
             @Override
             protected void initChannel(Channel ch) throws Exception {
                 logger.info("accepted {} = {}", listenPort, ch.remoteAddress());
-                ch.pipeline().addLast(new DuplexTransfer(host, port));
+                ch.pipeline().addLast(new DuplexTransfer(host, port).stopAutoRead(ch));
             }
         });
     }

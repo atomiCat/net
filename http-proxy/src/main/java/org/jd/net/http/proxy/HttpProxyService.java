@@ -1,6 +1,7 @@
 package org.jd.net.http.proxy;
 
 import io.netty.buffer.ByteBuf;
+import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import org.apache.commons.lang3.StringUtils;
@@ -42,6 +43,16 @@ public class HttpProxyService extends SplitHandler {
     private enum State {init, connect, http, body}
 
     private ArrayList<ByteBuf> dataToServer = new ArrayList<>();//要发往服务端的数据
+    ChannelHandler dataToServerHandler = new ChannelInboundHandlerAdapter() {
+        @Override
+        public void channelActive(ChannelHandlerContext ctx) throws Exception {
+            dataToServer.forEach(ctx::write);
+            ctx.flush();
+            dataToServer = null;
+            super.channelActive(ctx);
+        }
+    };
+
     private String host;
     private int port;
 
@@ -95,29 +106,10 @@ public class HttpProxyService extends SplitHandler {
             dataToServer.add(remains.retainedSlice());
             remains.clear().release();
 
-            ctx.channel().config().setAutoRead(false);//停止自动读，等连接到服务端后再继续读
-            ctx.pipeline().addLast(new DuplexTransfer(host, port, ChannelEvent.handlerAdded,
-                    new ChannelInboundHandlerAdapter() {
-                        @Override
-                        public void channelActive(ChannelHandlerContext ctx) throws Exception {
-                            dataToServer.forEach(ctx::write);
-                            ctx.flush();
-                            dataToServer = null;
-                            super.channelActive(ctx);
-                        }
-
-//                        @Override
-//                        public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
-//                            Buf.print("<=============", (ByteBuf) msg);
-//                            super.channelRead(ctx, msg);
-//                        }
-
-//                        @Override
-//                        public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
-//                            logger.error("======exceptionCaught=======",cause);
-//                            super.exceptionCaught(ctx, cause);
-//                        }
-                    }));
+            ctx.pipeline().addLast(
+                    new DuplexTransfer(host, port, ChannelEvent.handlerAdded, dataToServerHandler)
+                            .stopAutoRead(ctx.channel())//停止自动读，等连接到服务端后再继续读
+            );
         }
     }
 
@@ -147,10 +139,5 @@ public class HttpProxyService extends SplitHandler {
         String[] split = StringUtils.split(hostPort, ":");
         host = split[0];
         port = split.length == 2 ? Integer.valueOf(split[1]) : defaultPort;
-    }
-
-    @Override
-    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
-        ctx.close();
     }
 }

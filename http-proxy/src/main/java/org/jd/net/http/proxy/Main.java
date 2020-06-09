@@ -22,7 +22,7 @@ public class Main {
         Netty.accept(port, new ChannelInitializer<Channel>() {
             @Override
             protected void initChannel(Channel ch) throws Exception {
-                ch.pipeline().addLast(new DuplexTransfer(sHost, sPort));
+                ch.pipeline().addLast(new DuplexTransfer(sHost, sPort).stopAutoRead(ch));
             }
         }).syncUninterruptibly().channel().closeFuture().syncUninterruptibly();
 
