@@ -35,6 +35,8 @@ public class SplitHandler extends ChannelInboundHandlerAdapter {
 
         if (iEnd < 0) {//此次读取没有分隔符
             (bufs == null ? (bufs = Buf.alloc.compositeBuffer()) : bufs).addComponent(true, buffer);
+            if (bufs.readableBytes() > 8192)
+                throw new IllegalStateException("协议错误！");
             return;
         }
 

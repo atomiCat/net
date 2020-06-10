@@ -7,8 +7,6 @@ import io.netty.channel.ChannelInboundHandlerAdapter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-
 /**
  * 双向复制
  * 需要与 ctx.channel().config().setAutoRead(false) 配合使用
@@ -61,13 +59,6 @@ public class DuplexTransfer extends ChannelInboundHandlerAdapter {
             hostPort.close();
     }
 
-    @Override
-    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
-        if (cause instanceof IOException)
-            ctx.close();
-        else logger.error("", cause);
-    }
-
     private void connect(ChannelHandlerContext ctx) {
         Netty.connect(host, port, new ChannelInboundHandlerAdapter() {
             @Override
@@ -76,6 +67,7 @@ public class DuplexTransfer extends ChannelInboundHandlerAdapter {
                     hostPort.pipeline().addLast(hostPortHandler);
 
                 hostPort.pipeline().addLast(
+                        CloseOnException.handler,
                         new ChannelInboundHandlerAdapter() {
                             @Override
                             public void channelActive(ChannelHandlerContext hostPort) throws Exception {
@@ -83,11 +75,6 @@ public class DuplexTransfer extends ChannelInboundHandlerAdapter {
                                 ctx.pipeline().addLast(new Transfer(hostPort));//ctx数据复制到hostPort
                                 ctx.channel().config().setAutoRead(true);
                                 hostPort.fireChannelActive();
-                            }
-
-                            @Override
-                            public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
-                                DuplexTransfer.this.exceptionCaught(ctx, cause);
                             }
                         },
                         new Transfer(ctx)//hostPort数据复制到ctx
