@@ -12,6 +12,7 @@
         <module>tcp-proxy</module>
         <module>core</module>
         <module>http-proxy</module>
+        <module>http-proxy-udp</module>
     </modules>
 
     <dependencies>
