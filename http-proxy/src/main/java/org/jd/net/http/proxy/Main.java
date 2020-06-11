@@ -25,7 +25,9 @@ public class Main {
             @Override
             protected void initChannel(Channel ch) throws Exception {
                 ch.pipeline().addLast(
-                        new DuplexTransfer(sHost, sPort, ChannelEvent.channelActive, new XorCodec(password), CloseOnException.handler)
+                        new DuplexTransfer(sHost, sPort, ChannelEvent.channelActive,
+                                new XorCodec(password),
+                                CloseOnException.handler)
                                 .stopAutoRead(ch)
                 );
             }
@@ -37,7 +39,11 @@ public class Main {
         Netty.accept(port, new ChannelInitializer<Channel>() {
             @Override
             protected void initChannel(Channel ch) throws Exception {
-                ch.pipeline().addLast(new XorCodec(password), new HttpProxyService(), CloseOnException.handler);
+                ch.pipeline().addLast(
+                        new XorCodec(password),
+                        new HttpProxyService(),
+                        CloseOnException.handler
+                );
             }
         }).addListener(future -> {
             if (future.isSuccess())
