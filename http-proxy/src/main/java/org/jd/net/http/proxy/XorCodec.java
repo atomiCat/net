@@ -30,14 +30,7 @@ public class XorCodec extends ChannelDuplexHandler {
     public synchronized void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
 
         ByteBuf buf = (ByteBuf) msg;
-        byte[] bs = new byte[buf.readableBytes()];
-        buf.readBytes(bs);
-        for (int i = 0; i < bs.length; i++) {
-            if (decodeIndex == password.length)
-                decodeIndex = 0;
-            bs[i] = (byte) (bs[i] ^ password[decodeIndex++]);
-        }
-        buf.clear().writeBytes(bs);
+        decodeIndex = codec(buf, decodeIndex);
 
         if (headCodec) {//去掉头部
             for (int i = 0; i < 10; i++) {
@@ -67,16 +60,26 @@ public class XorCodec extends ChannelDuplexHandler {
             buf = Buf.alloc.compositeBuffer(2).addComponents(true, head, buf);
             headCodec = false;
         }
+        encodeIndex = codec(buf, encodeIndex);
+        ctx.write(buf, promise);
+    }
 
+    /**
+     *
+     * @param buf
+     * @param passwordIndex
+     * @return
+     */
+    private int codec(ByteBuf buf, int passwordIndex) {
         byte[] b = new byte[buf.readableBytes()];
         buf.readBytes(b);
         for (int i = 0; i < b.length; i++) {
-            if (encodeIndex == password.length)
-                encodeIndex = 0;
-            b[i] = (byte) (b[i] ^ password[encodeIndex++]);
+            if (passwordIndex == password.length)
+                passwordIndex = 0;
+            b[i] = (byte) (b[i] ^ password[passwordIndex++]);
         }
-        ctx.write(buf.clear().writeBytes(b), promise);
+        buf.clear().writeBytes(b);
+        return passwordIndex;
     }
-
 
 }
