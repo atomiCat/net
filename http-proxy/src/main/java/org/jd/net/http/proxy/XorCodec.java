@@ -1,7 +1,6 @@
 package org.jd.net.http.proxy;
 
 import io.netty.buffer.ByteBuf;
-import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
@@ -12,9 +11,9 @@ import java.nio.charset.StandardCharsets;
 
 public class XorCodec extends ChannelDuplexHandler {
     private final byte[] password;
-    private int index = 0;
+    private int decodeIndex = 0, encodeIndex = 0;
 
-    private boolean headCodec = true;//头部已处理
+    private volatile boolean headCodec = true;//头部已处理
     private boolean[] headPassword = new boolean[]{
             false, false, true, true, true, false, false, true, false, true, true,
             true, false, false, true, true, true, false, false, true, true, false,
@@ -28,8 +27,18 @@ public class XorCodec extends ChannelDuplexHandler {
     }
 
     @Override
-    public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
-        ByteBuf buf = codec((ByteBuf) msg);
+    public synchronized void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+
+        ByteBuf buf = (ByteBuf) msg;
+        byte[] bs = new byte[buf.readableBytes()];
+        buf.readBytes(bs);
+        for (int i = 0; i < bs.length; i++) {
+            if (decodeIndex == password.length)
+                decodeIndex = 0;
+            bs[i] = (byte) (bs[i] ^ password[decodeIndex++]);
+        }
+        buf.clear().writeBytes(bs);
+
         if (headCodec) {//去掉头部
             for (int i = 0; i < 10; i++) {
                 byte b = buf.readByte();
@@ -44,7 +53,7 @@ public class XorCodec extends ChannelDuplexHandler {
     }
 
     @Override
-    public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
+    public synchronized void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
         ByteBuf buf = (ByteBuf) msg;
         if (headCodec) {//添加头部
             ByteBuf head = Buf.alloc(10);
@@ -58,20 +67,15 @@ public class XorCodec extends ChannelDuplexHandler {
             buf = Buf.alloc.compositeBuffer(2).addComponents(true, head, buf);
             headCodec = false;
         }
-        ctx.write(codec(buf), promise);
-    }
-
-    private ByteBuf codec(ByteBuf buf) {
 
         byte[] b = new byte[buf.readableBytes()];
         buf.readBytes(b);
-        buf.release();
         for (int i = 0; i < b.length; i++) {
-            if (index == password.length)
-                index = 0;
-            b[i] = (byte) (b[i] ^ password[index++]);
+            if (encodeIndex == password.length)
+                encodeIndex = 0;
+            b[i] = (byte) (b[i] ^ password[encodeIndex++]);
         }
-        return Unpooled.wrappedBuffer(b);
+        ctx.write(buf.clear().writeBytes(b), promise);
     }
 
 
