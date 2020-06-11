@@ -6,6 +6,7 @@ import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.socket.nio.NioDatagramChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import org.slf4j.Logger;
@@ -57,6 +58,26 @@ public class Netty {
                 logger.info("Acceptor shutdownGracefully because bind fail port:", port);
                 workerGroup.shutdownGracefully();
                 bossGroup.shutdownGracefully();
+            }
+        });
+        return bindFuture;
+    }
+
+    public static ChannelFuture udp(int port, ChannelHandler handler) {
+        EventLoopGroup group = new NioEventLoopGroup();
+        Bootstrap b = new Bootstrap();
+        b.group(group).channel(NioDatagramChannel.class)
+                .handler(handler);
+        ChannelFuture bindFuture = b.bind(port);
+        bindFuture.addListener(future -> {
+            if (future.isSuccess()) {
+                bindFuture.channel().closeFuture().addListener(close -> {
+                    logger.info("udp shutdownGracefully because closed port:", port);
+                    group.shutdownGracefully();
+                });
+            } else {//绑定失败
+                logger.info("udp shutdownGracefully because bind fail port:", port);
+                group.shutdownGracefully();
             }
         });
         return bindFuture;

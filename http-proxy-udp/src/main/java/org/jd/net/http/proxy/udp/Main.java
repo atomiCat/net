@@ -1,6 +1,8 @@
 package org.jd.net.http.proxy.udp;
 
 import io.netty.channel.Channel;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelInitializer;
 import org.jd.net.core.ChannelEvent;
 import org.jd.net.core.CloseOnException;
@@ -22,15 +24,27 @@ public class Main {
         }
     }
 
+    static ChannelHandlerContext pServer;
+
     static void clientStart(int port, String sHost, int sPort, String password) {
+        Netty.udp(sPort, new ChannelInboundHandlerAdapter() {
+            @Override
+            public void channelRegistered(ChannelHandlerContext ctx) throws Exception {
+                pServer = ctx;
+                ctx.pipeline().addLast(new XorCodec(password), CloseOnException.handler);
+            }
+        }).syncUninterruptibly();
+
         Netty.accept(port, new ChannelInitializer<Channel>() {
             @Override
             protected void initChannel(Channel ch) throws Exception {
                 ch.pipeline().addLast(
-                        new DuplexTransfer(sHost, sPort, ChannelEvent.channelActive,
-                                new XorCodec(password),
-                                CloseOnException.handler)
-                                .stopAutoRead(ch)
+                        new ChannelInboundHandlerAdapter(){
+                            @Override
+                            public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+
+                            }
+                        }
                 );
             }
         }).syncUninterruptibly().channel().closeFuture().syncUninterruptibly();
