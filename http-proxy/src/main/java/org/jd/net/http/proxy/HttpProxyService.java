@@ -127,7 +127,7 @@ public class HttpProxyService extends SplitHandler {
     public void channelInactive(ChannelHandlerContext ctx) throws Exception {
         if (dataToServer != null)
             dataToServer.forEach(ByteBuf::release);
-        System.gc();
+//        System.gc();
         super.channelInactive(ctx);
     }
 
