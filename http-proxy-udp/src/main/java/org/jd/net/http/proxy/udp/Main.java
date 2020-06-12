@@ -1,17 +1,16 @@
 package org.jd.net.http.proxy.udp;
 
 import io.netty.channel.Channel;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelInitializer;
-import org.jd.net.core.ChannelEvent;
 import org.jd.net.core.CloseOnException;
-import org.jd.net.core.DuplexTransfer;
 import org.jd.net.core.Netty;
+import org.jd.net.core.rudp.DuplexTransferRUDP;
 import org.jd.net.http.proxy.HttpProxyService;
 import org.jd.net.http.proxy.XorCodec;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.net.InetSocketAddress;
 
 public class Main {
     static Logger logger = LoggerFactory.getLogger(Main.class);
@@ -24,27 +23,15 @@ public class Main {
         }
     }
 
-    static ChannelHandlerContext pServer;
-
     static void clientStart(int port, String sHost, int sPort, String password) {
-        Netty.udp(sPort, new ChannelInboundHandlerAdapter() {
-            @Override
-            public void channelRegistered(ChannelHandlerContext ctx) throws Exception {
-                pServer = ctx;
-                ctx.pipeline().addLast(new XorCodec(password), CloseOnException.handler);
-            }
-        }).syncUninterruptibly();
-
         Netty.accept(port, new ChannelInitializer<Channel>() {
             @Override
             protected void initChannel(Channel ch) throws Exception {
                 ch.pipeline().addLast(
-                        new ChannelInboundHandlerAdapter(){
-                            @Override
-                            public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
-
-                            }
-                        }
+                        new DuplexTransferRUDP(new InetSocketAddress(sHost, sPort),
+                                new XorCodec(password),
+                                CloseOnException.handler)
+                                .stopAutoRead(ch)
                 );
             }
         }).syncUninterruptibly().channel().closeFuture().syncUninterruptibly();
