@@ -8,7 +8,8 @@ import org.jd.net.core.Transfer;
 import java.net.InetSocketAddress;
 
 /**
- * 将 tcp 数据通过 udp协议 发送到 remote
+ * 添加至tcp的pipeline
+ * 将从 tcp 读到的数据通过 udp协议 发送到 remote
  * 并将从 remote 接收到的数据返回给 tcp
  * 需要与 {@link #stopAutoRead(Channel)} 配合使用
  *
@@ -26,15 +27,12 @@ public class DuplexTransferRUDP extends ChannelInboundHandlerAdapter {
     /**
      * @param udpAddr udp address
      */
-    public DuplexTransferRUDP(InetSocketAddress udpAddr, ChannelHandler... hostPortHandler) {
+    public DuplexTransferRUDP(InetSocketAddress udpAddr) {
         Netty.udp(0, new ChannelInboundHandlerAdapter() {
             @Override
             public void channelRegistered(ChannelHandlerContext udp) throws Exception {
                 ChannelPipeline pipeline = udp.pipeline();
                 pipeline.addLast(new RUDPHandler(udpAddr, tcp));
-                if (hostPortHandler != null)
-                    pipeline.addLast(hostPortHandler);
-
                 pipeline.addLast(
                         CloseOnException.handler,
                         new ChannelInboundHandlerAdapter() {

@@ -2,17 +2,17 @@ package org.jd.net.core.rudp;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.CompositeByteBuf;
-import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
-import io.netty.channel.ChannelPromise;
 import io.netty.channel.socket.DatagramPacket;
+import io.netty.handler.codec.MessageToMessageCodec;
 import org.jd.net.core.Buf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -22,10 +22,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * 添加到udp.pipeline中
  * 将udp数据包转为byteBuf
- * 写入到tcp中
+ * 将读到的udp报文转为tcp并触发channelRead
  */
-public class RUDPHandler extends ChannelDuplexHandler {
-    static Logger logger = LoggerFactory.getLogger(RUDPHandler.class);
+public class DatagramPacketByteBufCodec extends MessageToMessageCodec<DatagramPacket, ByteBuf> {
+    static Logger logger = LoggerFactory.getLogger(DatagramPacketByteBufCodec.class);
     static ExecutorService executorService = Executors.newFixedThreadPool(20);
 
     public interface FLAG {
@@ -37,7 +37,7 @@ public class RUDPHandler extends ChannelDuplexHandler {
     private final InetSocketAddress udpAddr;
     private final ChannelHandlerContext tcp;
 
-    public RUDPHandler(InetSocketAddress udpAddr, ChannelHandlerContext tcp) {
+    public DatagramPacketByteBufCodec(InetSocketAddress udpAddr, ChannelHandlerContext tcp) {
         this.udpAddr = udpAddr;
         this.tcp = tcp;
     }
@@ -77,15 +77,53 @@ public class RUDPHandler extends ChannelDuplexHandler {
 
     private ArrayList<Sudp> writeSudp = new ArrayList<>();//已发送
 
-    AtomicInteger index = new AtomicInteger(0);
+    private AtomicInteger index = new AtomicInteger(0);
 
     @Override
-    public void write(ChannelHandlerContext udp, Object msg, ChannelPromise promise) throws Exception {
+    protected void encode(ChannelHandlerContext ctx, ByteBuf msg, List<Object> out) throws Exception {
         CompositeByteBuf bufs = Buf.alloc.compositeBuffer(2)
-                .addComponents(true, Buf.wrap(index.getAndAdd(1)), (ByteBuf) msg);
+                .addComponents(true, Buf.wrap(index.getAndAdd(1)), msg);
         writeSudp.add(new Sudp().setBuf(bufs.retainedSlice()));
-        udp.write(new DatagramPacket(bufs, udpAddr));
-        super.write(udp, msg, promise);
+        out.add(new DatagramPacket(bufs, udpAddr));
+    }
+
+    @Override
+    protected void decode(ChannelHandlerContext udp, DatagramPacket packet, List<Object> out) throws Exception {
+        ByteBuf buf = packet.content();
+        int index = buf.readInt();
+        if (index == FLAG.response) {//收到对方的响应
+            writeSudp.get(buf.readInt()).respTime = System.currentTimeMillis();
+            buf.release();
+            return;
+        } else {//告诉另一端的udp已经接收到包
+            udp.channel().writeAndFlush(Buf.wrap(FLAG.response, index));
+        }
+
+        if (index < consumed) {//收到重复包
+            buf.release();
+            return;
+        }
+        while (index >= readBufs.size()) {
+            readBufs.add(null);
+        }
+        readBufs.add(index, buf);
+
+        for (int i = consumed; i < readBufs.size(); i++) {
+            ByteBuf byteBuf = readBufs.get(i);
+            if (byteBuf == null)
+                break;
+            switch (byteBuf.readInt()) {
+                case FLAG.data:
+                    out.add(byteBuf);
+                    break;
+                case FLAG.close:
+                    udp.close();
+                    byteBuf.release();
+                    break;
+                default:
+                    throw new IllegalArgumentException("标志位有误！");
+            }
+        }
     }
 
     private Future<?> resend;
@@ -122,45 +160,5 @@ public class RUDPHandler extends ChannelDuplexHandler {
 
     private ArrayList<ByteBuf> readBufs = new ArrayList<>();
     private int consumed = 0;
-
-    @Override
-    public void channelRead(ChannelHandlerContext udp, Object msg) throws Exception {
-        DatagramPacket packet = (DatagramPacket) msg;
-        ByteBuf buf = packet.content();
-        int index = buf.readInt();
-        if (index == FLAG.response) {//收到对方的响应
-            writeSudp.get(buf.readInt()).respTime = System.currentTimeMillis();
-            buf.release();
-            return;
-        } else {//告诉另一端的udp已经接收到包
-            udp.channel().writeAndFlush(Buf.wrap(FLAG.response, index));
-        }
-
-        if (index < consumed) {//收到重复包
-            buf.release();
-            return;
-        }
-        while (index >= readBufs.size()) {
-            readBufs.add(null);
-        }
-        readBufs.add(index, buf);
-
-        for (int i = consumed; i < readBufs.size(); i++) {
-            ByteBuf byteBuf = readBufs.get(i);
-            if (byteBuf == null)
-                break;
-            switch (byteBuf.readInt()) {
-                case FLAG.data:
-                    udp.fireChannelRead(byteBuf);
-                    break;
-                case FLAG.close:
-                    udp.close();
-                    byteBuf.release();
-                    break;
-                default:
-                    throw new IllegalArgumentException("标志位有误！");
-            }
-        }
-    }
 
 }
