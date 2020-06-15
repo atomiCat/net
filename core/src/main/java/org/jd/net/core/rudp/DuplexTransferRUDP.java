@@ -1,7 +1,6 @@
 package org.jd.net.core.rudp;
 
 import io.netty.channel.*;
-import org.jd.net.core.CloseOnException;
 import org.jd.net.core.Netty;
 import org.jd.net.core.Transfer;
 
@@ -36,7 +35,6 @@ public class DuplexTransferRUDP extends ChannelInboundHandlerAdapter {
                     pipeline.addLast(hostPortHandler);
 
                 pipeline.addLast(
-                        CloseOnException.handler,
                         new ChannelInboundHandlerAdapter() {
                             @Override
                             public void channelActive(ChannelHandlerContext ctx) throws Exception {

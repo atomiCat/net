@@ -10,8 +10,8 @@ import org.slf4j.LoggerFactory;
 /**
  * 双向复制
  * 需要与 ctx.channel().config().setAutoRead(false) 配合使用
- *
  * @see #stopAutoRead(Channel)
+ * 不负责异常处理
  */
 public class DuplexTransfer extends ChannelInboundHandlerAdapter {
     private static final Logger logger = LoggerFactory.getLogger(DuplexTransfer.class);
@@ -31,10 +31,6 @@ public class DuplexTransfer extends ChannelInboundHandlerAdapter {
         assert connectOn == ChannelEvent.handlerAdded || connectOn == ChannelEvent.channelActive;
         this.connectOn = connectOn;
         this.hostPortHandler = hostPortHandler;
-    }
-
-    public DuplexTransfer(String host, int port) {
-        this(host, port, ChannelEvent.channelActive);
     }
 
     @Override
@@ -67,7 +63,6 @@ public class DuplexTransfer extends ChannelInboundHandlerAdapter {
                     hostPort.pipeline().addLast(hostPortHandler);
 
                 hostPort.pipeline().addLast(
-                        CloseOnException.handler,
                         new ChannelInboundHandlerAdapter() {
                             @Override
                             public void channelActive(ChannelHandlerContext hostPort) throws Exception {

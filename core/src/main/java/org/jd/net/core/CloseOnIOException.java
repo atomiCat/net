@@ -9,9 +9,9 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 
 @ChannelHandler.Sharable
-public class CloseOnException extends ChannelInboundHandlerAdapter {
-    static Logger logger = LoggerFactory.getLogger(CloseOnException.class);
-    public static CloseOnException handler = new CloseOnException();
+public class CloseOnIOException extends ChannelInboundHandlerAdapter {
+    static Logger logger = LoggerFactory.getLogger(CloseOnIOException.class);
+    public static CloseOnIOException handler = new CloseOnIOException();
 
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {

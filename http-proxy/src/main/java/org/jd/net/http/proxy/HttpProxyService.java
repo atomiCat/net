@@ -5,10 +5,7 @@ import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import org.apache.commons.lang3.StringUtils;
-import org.jd.net.core.Buf;
-import org.jd.net.core.ChannelEvent;
-import org.jd.net.core.DuplexTransfer;
-import org.jd.net.core.SplitHandler;
+import org.jd.net.core.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -107,10 +104,16 @@ public class HttpProxyService extends SplitHandler {
             remains.clear().release();
 
             ctx.pipeline().addLast(
-                    new DuplexTransfer(host, port, ChannelEvent.handlerAdded, dataToServerHandler)
+                    new DuplexTransfer(host, port, ChannelEvent.handlerAdded, dataToServerHandler, CloseOnIOException.handler)
                             .stopAutoRead(ctx.channel())//停止自动读，等连接到服务端后再继续读
             );
         }
+    }
+
+    @Override
+    public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
+        ctx.pipeline().addLast(CloseOnIOException.handler);
+        super.handlerAdded(ctx);
     }
 
     @Override

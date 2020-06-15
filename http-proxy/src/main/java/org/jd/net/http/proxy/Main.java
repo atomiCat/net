@@ -3,7 +3,7 @@ package org.jd.net.http.proxy;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelInitializer;
 import org.jd.net.core.ChannelEvent;
-import org.jd.net.core.CloseOnException;
+import org.jd.net.core.CloseOnIOException;
 import org.jd.net.core.DuplexTransfer;
 import org.jd.net.core.Netty;
 import org.slf4j.Logger;
@@ -25,10 +25,11 @@ public class Main {
             @Override
             protected void initChannel(Channel ch) throws Exception {
                 ch.pipeline().addLast(
-                        new DuplexTransfer(sHost, sPort, ChannelEvent.channelActive,
-                                new XorCodec(password),
-                                CloseOnException.handler)
-                                .stopAutoRead(ch)
+                        new DuplexTransfer(
+                                sHost, sPort, ChannelEvent.channelActive,
+                                new XorCodec(password), CloseOnIOException.handler
+                        ).stopAutoRead(ch),
+                        CloseOnIOException.handler
                 );
             }
         }).syncUninterruptibly().channel().closeFuture().syncUninterruptibly();
@@ -41,8 +42,7 @@ public class Main {
             protected void initChannel(Channel ch) throws Exception {
                 ch.pipeline().addLast(
                         new XorCodec(password),
-                        new HttpProxyService(),
-                        CloseOnException.handler
+                        new HttpProxyService()
                 );
             }
         }).addListener(future -> {

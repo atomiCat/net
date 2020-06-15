@@ -1,6 +1,8 @@
 package org.jd.net.tcp.proxy;
 
 import io.netty.channel.*;
+import org.jd.net.core.ChannelEvent;
+import org.jd.net.core.CloseOnIOException;
 import org.jd.net.core.DuplexTransfer;
 import org.jd.net.core.Netty;
 import org.slf4j.Logger;
@@ -52,9 +54,22 @@ public class Main {
         logger.info("启动tcp代理：{} --> {}:{}", listenPort, host, port);
         return Netty.accept(listenPort, new ChannelInitializer<Channel>() {
             @Override
-            protected void initChannel(Channel ch) throws Exception {
-                logger.info("accepted {} = {}", listenPort, ch.remoteAddress());
-                ch.pipeline().addLast(new DuplexTransfer(host, port).stopAutoRead(ch));
+            protected void initChannel(Channel ch) {
+                logger.info("accepted({}): {}", listenPort, ch.remoteAddress());
+                ch.pipeline().addLast(
+                        new DuplexTransfer(
+                                host, port, ChannelEvent.channelActive, CloseOnIOException.handler,
+                                new ChannelInboundHandlerAdapter() {
+                                    @Override
+                                    public void channelActive(ChannelHandlerContext ctx) throws Exception {
+                                        Channel channel = ctx.channel();
+                                        logger.info("connect success {} --> {}", channel.localAddress(), channel.remoteAddress());
+                                        super.channelActive(ctx);
+                                    }
+                                }
+                        ).stopAutoRead(ch),
+                        CloseOnIOException.handler
+                );
             }
         });
     }

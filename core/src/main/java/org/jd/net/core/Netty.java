@@ -2,6 +2,7 @@ package org.jd.net.core;
 
 import io.netty.bootstrap.Bootstrap;
 import io.netty.bootstrap.ServerBootstrap;
+import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.EventLoopGroup;
@@ -24,9 +25,10 @@ public class Netty {
         b.handler(channelHandler);
         ChannelFuture connectFuture = b.connect(host, port);// (5)
         connectFuture.addListener(future -> {
+            Channel channel = connectFuture.channel();
             if (future.isSuccess()) {
-                connectFuture.channel().closeFuture().addListener(closeFuture -> {
-                    logger.info("Connector shutdownGracefully because closed {}:{}", host, port);
+                channel.closeFuture().addListener(closeFuture -> {
+                    logger.info("Connector shutdownGracefully because closed {} --> {}", channel.localAddress(), channel.remoteAddress());
                     workerGroup.shutdownGracefully();
                 });
             } else {
