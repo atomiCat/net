@@ -13,6 +13,7 @@
         <module>core</module>
         <module>http-proxy</module>
         <module>http-proxy-udp</module>
+        <module>tcp-udp-tcp</module>
     </modules>
 
     <dependencies>
