@@ -2,7 +2,7 @@ package org.jd.net.http.proxy.udp;
 
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelInitializer;
-import org.jd.net.core.CloseOnException;
+import org.jd.net.core.CloseOnIOException;
 import org.jd.net.core.Netty;
 import org.jd.net.core.rudp.DuplexTransferRUDP;
 import org.jd.net.http.proxy.HttpProxyService;
@@ -28,9 +28,7 @@ public class Main {
             @Override
             protected void initChannel(Channel ch) throws Exception {
                 ch.pipeline().addLast(
-                        new DuplexTransferRUDP(new InetSocketAddress(sHost, sPort),
-                                new XorCodec(password),
-                                CloseOnException.handler)
+                        new DuplexTransferRUDP(new InetSocketAddress(sHost, sPort))
                                 .stopAutoRead(ch)
                 );
             }
@@ -45,7 +43,7 @@ public class Main {
                 ch.pipeline().addLast(
                         new XorCodec(password),
                         new HttpProxyService(),
-                        CloseOnException.handler
+                        CloseOnIOException.handler
                 );
             }
         }).addListener(future -> {
