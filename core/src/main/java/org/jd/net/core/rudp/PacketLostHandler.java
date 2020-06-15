@@ -13,6 +13,7 @@ import org.slf4j.LoggerFactory;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -24,37 +25,41 @@ public class PacketLostHandler extends ChannelDuplexHandler {
     static Logger logger = LoggerFactory.getLogger(PacketLostHandler.class);
     static final int responseFlag = -556315684;//必须小于0
 
-    static class Datagram {
+    static class DataInfo {
         private final DatagramPacket packet;
-        long[] sendTime = new long[10];
-        int sendTimeLength = 0;
-        long respTime;
+        public final int index;
+        long sendTime;//发送时间
+        int sendTimes;//发送次数
+        long respTime;//响应时间
 
-        public Datagram(DatagramPacket packet) {
+        public DataInfo(DatagramPacket packet) {
             this.packet = packet;
+            index = packet.content().getInt(packet.content().readerIndex());
         }
 
         /**
          * 复制一个 DatagramPacket 用于发送
          */
         public DatagramPacket packet() {
-            sendTime[sendTimeLength++] = System.currentTimeMillis();
+            sendTime = System.currentTimeMillis();
+            sendTimes++;
             return packet.replace(packet.content().retainedSlice());
         }
     }
 
-    ConcurrentHashMap<Integer, Datagram> datagrams = new ConcurrentHashMap<>();//已发送的数据包
+    ConcurrentLinkedQueue<DataInfo> dataQueue = new ConcurrentLinkedQueue<>();//已发送的数据包
+    ConcurrentHashMap<Integer, DataInfo> dataMap = new ConcurrentHashMap<>();//已发送的数据包
     AtomicInteger index = new AtomicInteger(0);
 
     @Override
     public void write(ChannelHandlerContext udp, Object msg, ChannelPromise promise) throws Exception {
         DatagramPacket packet = (DatagramPacket) msg;
-        int packetIndex = index.getAndAdd(1);
         CompositeByteBuf bufs = Buf.alloc.compositeBuffer(2)
-                .addComponents(true, Buf.wrap(packetIndex), packet.content());
-        Datagram datagram = new Datagram(packet.replace(bufs));
-        datagrams.put(packetIndex, datagram);
-        udp.write(datagram.packet());
+                .addComponents(true, Buf.wrap(index.getAndAdd(1)), packet.content());
+        DataInfo dataInfo = new DataInfo(packet.replace(bufs));
+        dataQueue.offer(dataInfo);
+        dataMap.put(dataInfo.index, dataInfo);
+        udp.write(dataInfo.packet());
         super.write(udp, msg, promise);
     }
 
@@ -65,22 +70,22 @@ public class PacketLostHandler extends ChannelDuplexHandler {
         resendThread = new Thread(() -> {
             try {
                 while (true) {
-                    TimeUnit.MILLISECONDS.sleep(150);
-                    int resentCount = 0, datagramSize = datagrams.size();
-                    for (Integer i : datagrams.keySet()) {
-                        Datagram datagram = datagrams.get(i);
-                        if (datagram.respTime == 0) {//没有响应
-                            udp.channel().write(datagram.packet());
-                            resentCount++;
+                    TimeUnit.MILLISECONDS.sleep(10);
+                    int sent = 0, count = dataMap.size();
+                    for (DataInfo dataInfo = dataQueue.peek(); dataInfo != null && System.currentTimeMillis() - dataInfo.sendTime > 200; dataInfo = dataQueue.peek()) {
+                        dataQueue.poll();//移除头部
+                        if (dataInfo.respTime == 0) {//没有响应
+                            udp.channel().write(dataInfo.packet());//重发
+                            dataQueue.offer(dataInfo);//放到队列尾部
+                            sent++;
                         } else {//已响应
-                            datagram.packet.content().release();
-                            datagram.packet.release();
-                            datagrams.remove(i);
+                            dataInfo.packet.release();
+                            dataMap.remove(dataInfo.index);
                         }
                     }
-                    if (resentCount > 0) {
+                    if (sent > 0) {
                         udp.channel().flush();
-                        logger.info("丢包重发：{}/{} ", resentCount, datagramSize);
+                        logger.info("丢包重发：{}/{} ", sent, count);
                     }
                 }
             } catch (InterruptedException e) {
@@ -96,15 +101,16 @@ public class PacketLostHandler extends ChannelDuplexHandler {
     @Override
     public void channelRead(ChannelHandlerContext udp, Object msg) throws Exception {
         DatagramPacket packet = (DatagramPacket) msg;
-        ByteBuf buf = packet.content();
-        int index = buf.readInt();
+        int index = packet.content().readInt();
+
         if (index == responseFlag) {//收到对方的响应
-            Datagram datagram = datagrams.get(buf.readInt());
-            if (datagram.respTime == 0)//只记录第一次收到响应的时间
-                datagram.respTime = System.currentTimeMillis();
+            DataInfo dataInfo = dataMap.get(index);
+            if (dataInfo.respTime == 0)//只记录第一次收到响应的时间
+                dataInfo.respTime = System.currentTimeMillis();
             packet.release();
             return;
         }
+
         udp.channel().writeAndFlush(Buf.wrap(responseFlag, index));//发送响应，告诉另一端的udp已经接收到包
 
         if (consumedIndex.contains(index)) {//收到重复包
