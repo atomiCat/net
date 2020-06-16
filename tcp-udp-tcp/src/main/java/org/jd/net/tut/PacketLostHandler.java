@@ -1,6 +1,5 @@
-package org.jd.net.core.rudp;
+package org.jd.net.tut;
 
-import io.netty.buffer.ByteBuf;
 import io.netty.buffer.CompositeByteBuf;
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelHandlerContext;
@@ -10,14 +9,16 @@ import org.jd.net.core.Buf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collection;
 import java.util.HashSet;
-import java.util.LinkedList;
+import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
+ * udp
  * 丢包重发,保证不丢包
  * 接收到重复的包去重
  */
@@ -95,8 +96,8 @@ public class PacketLostHandler extends ChannelDuplexHandler {
         super.channelActive(udp);
     }
 
-    private LinkedList<ByteBuf> readBufs = new LinkedList<>();
-    private HashSet<Integer> consumedIndex = new HashSet<>();//已经消费掉的
+    private TreeSet<Integer> consumedIndex = new TreeSet<>();//已经消费掉的
+    private Integer consumedIndexMin = 0;//index小于此值的包会被忽略
 
     @Override
     public void channelRead(ChannelHandlerContext udp, Object msg) throws Exception {
@@ -113,12 +114,27 @@ public class PacketLostHandler extends ChannelDuplexHandler {
 
         udp.channel().writeAndFlush(Buf.wrap(responseFlag, index));//发送响应，告诉另一端的udp已经接收到包
 
-        if (consumedIndex.contains(index)) {//收到重复包
+        if (index <= consumedIndexMin || consumedIndex.contains(index)) {//收到重复包
             packet.release();
             return;
         }
         consumedIndex.add(index);//记录已经收到该包
         udp.fireChannelRead(msg);
+
+        Collection<Integer> toRemove = new HashSet<>();//待删除
+        Integer that = null;
+        for (Integer next : consumedIndex) {
+            if (that != null) {
+                if (next == that + 1) {//删除连续的已消费的index
+                    toRemove.add(that);
+                    consumedIndexMin = that;
+                } else {
+                    break;
+                }
+            }
+            that = next;
+        }
+        consumedIndex.removeAll(toRemove);
     }
 
 }
