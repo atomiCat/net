@@ -1,13 +1,12 @@
 package org.jd.net.tut;
 
 import io.netty.buffer.ByteBuf;
-import io.netty.channel.*;
-import io.netty.channel.socket.DatagramPacket;
+import io.netty.channel.Channel;
+import io.netty.channel.ChannelInitializer;
 import org.jd.net.core.Netty;
 
 import java.net.InetSocketAddress;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
 
 public class Main {
     public static void main(String[] a) {
@@ -23,8 +22,7 @@ public class Main {
      */
     static void client(int tcpListenPort, String host, int port) {
         ConcurrentHashMap<Integer, Channel> tcpMap = new ConcurrentHashMap<>();
-        Channel udpServer = Netty.udp(port, new UdpTcpTransfer(new InetSocketAddress(host, port), tcpMap))
-                .syncUninterruptibly().channel();
+        Channel udpServer = Netty.udp(port, new UdpTcpTransfer(new InetSocketAddress(host, port), tcpMap)).channel();
 
         Netty.accept(tcpListenPort, new ChannelInitializer<Channel>() {
             @Override
@@ -43,6 +41,18 @@ public class Main {
      */
     static void server(int udpListenPort, String host, int port) {
         ConcurrentHashMap<Integer, Channel> tcpMap = new ConcurrentHashMap<>();
-        Channel udpServer = Netty.udp(udpListenPort, new ).syncUninterruptibly().channel();
+        udpServer = Netty.udp(udpListenPort, new UdpTcpTransfer(null, tcpMap) {
+            @Override
+            protected void write2Tcp(ByteBuf buf) {
+                int index = buf.readInt();
+                Channel channel = tcpMap.get(index);
+                if (channel == null) {
+                    channel = Netty.connect(host, port, new TcpUdpTransfer(tcpMap, udpServer)).channel();
+                }
+                channel.writeAndFlush(buf);
+            }
+        }).channel();
     }
+
+    static Channel udpServer;
 }
