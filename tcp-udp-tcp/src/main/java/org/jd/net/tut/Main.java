@@ -2,15 +2,23 @@ package org.jd.net.tut;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
+import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelInitializer;
 import org.jd.net.core.Netty;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class Main {
+    static Logger logger = LoggerFactory.getLogger(Main.class);
+
     public static void main(String[] a) {
-        client(2000, "127.0.0.1", 2001);
+        if ("-s".equals(a[0]))// -s udp监听端口 tcpHost tcPort
+            server(Integer.valueOf(a[1]), a[2], Integer.valueOf(a[3]));
+        else if ("-c".equals(a[0]))//-c tcp监听端口 udpServerHost udpServerPort
+            client(Integer.valueOf(a[1]), a[2], Integer.valueOf(a[3]));
     }
 
     /**
@@ -23,13 +31,13 @@ public class Main {
     static void client(int tcpListenPort, String host, int port) {
         ConcurrentHashMap<Integer, Channel> tcpMap = new ConcurrentHashMap<>();
         Channel udpServer = Netty.udp(port, new UdpTcpTransfer(new InetSocketAddress(host, port), tcpMap)).channel();
-
         Netty.accept(tcpListenPort, new ChannelInitializer<Channel>() {
             @Override
             protected void initChannel(Channel ch) throws Exception {
+                logger.info("accept {}", ch.remoteAddress());
                 ch.pipeline().addLast(new TcpUdpTransfer(tcpMap, udpServer));
             }
-        }).syncUninterruptibly().channel().closeFuture().syncUninterruptibly();
+        }).channel().closeFuture().syncUninterruptibly();
     }
 
     /**
@@ -44,15 +52,21 @@ public class Main {
         udpServer = Netty.udp(udpListenPort, new UdpTcpTransfer(null, tcpMap) {
             @Override
             protected void write2Tcp(ByteBuf buf) {
-                int index = buf.readInt();
-                Channel channel = tcpMap.get(index);
-                if (channel == null) {
-                    channel = Netty.connect(host, port, new TcpUdpTransfer(tcpMap, udpServer)).channel();
-                }
-                channel.writeAndFlush(buf);
+                tcpMap.computeIfAbsent(buf.readInt(), integer -> {
+                    TcpUdpTransfer tcpUdpTransfer = new TcpUdpTransfer(tcpMap, udpServer);
+                    ChannelFuture future = Netty.connect(host, port, tcpUdpTransfer);
+                    future.addListener(future1 -> {
+                        if (!future1.isSuccess()) {
+                            logger.warn("connect fail,tcpUdpTransfer.close");
+                            tcpUdpTransfer.close();
+                        }
+                    });
+                    return future.channel();
+                }).writeAndFlush(buf);
             }
         }).channel();
+        udpServer.closeFuture().syncUninterruptibly();
     }
 
-    static Channel udpServer;
+    private static Channel udpServer;
 }

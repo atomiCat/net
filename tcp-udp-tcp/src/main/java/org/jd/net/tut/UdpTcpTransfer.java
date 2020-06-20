@@ -43,7 +43,7 @@ public class UdpTcpTransfer extends ChannelDuplexHandler {
         if (remote == null)
             remote = datagramPacket.sender();
         ByteBuf buf = (datagramPacket).content();
-
+        write2Tcp(buf);
     }
 
     protected void write2Tcp(ByteBuf buf) {

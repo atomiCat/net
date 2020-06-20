@@ -10,7 +10,7 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
 import org.jd.net.core.Buf;
 
-import java.util.HashSet;
+import java.util.Iterator;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -52,37 +52,62 @@ public class TcpUdpTransfer extends ChannelDuplexHandler {
         udp.writeAndFlush(cbuf);
     }
 
+    private boolean channelNotActive = true;
+
+    @Override
+    public void channelActive(ChannelHandlerContext ctx) throws Exception {
+        channelNotActive = false;
+        if (!indexBufs.isEmpty())
+            write(ctx, null, null);
+        super.channelActive(ctx);
+    }
+
     TreeSet<IndexBuf> indexBufs = new TreeSet<>();
+    private int lastConsumedIndex = -1;
 
     @Override//将udp写来的包排序
     public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
-        ByteBuf buf = (ByteBuf) msg;
-        indexBufs.add(new IndexBuf(buf.readInt(), buf));
-        HashSet<IndexBuf> toRemove = new HashSet<>();
-        IndexBuf that = null;
-        for (IndexBuf next : indexBufs) {
-            if (that != null) {
-                if (that.index + 1 == next.index) {
-                    ctx.write(that.byteBuf, promise);
-                    toRemove.add(that);
+        if (msg instanceof ByteBuf) {
+            ByteBuf buf = (ByteBuf) msg;
+            indexBufs.add(new IndexBuf(buf.readInt(), buf));
+        }
+        if (channelNotActive)
+            return;
+        //将indexBufs数据发送到tcp
+        Iterator<IndexBuf> iterator = indexBufs.iterator();
+        while (iterator.hasNext()) {
+            IndexBuf buf = iterator.next();
+            if (buf.index == lastConsumedIndex + 1) {
+                if (buf.byteBuf.isReadable()) {
+                    if (promise == null)
+                        ctx.write(buf.byteBuf);
+                    else
+                        ctx.write(buf.byteBuf, promise);
                 } else {
-                    break;
+                    ctx.flush();
+                    buf.byteBuf.release();
+                    ctx.close();
                 }
-            }
-            that = next;
-            if (that.byteBuf.readableBytes() == 0) {//最后一个数据包
-                ctx.flush();
-                that.byteBuf.release();
-                ctx.close();
+                lastConsumedIndex = buf.index;
+                iterator.remove();
             }
         }
-        indexBufs.removeAll(toRemove);//移除已消费
+    }
+
+    /**
+     * 清理资源
+     */
+    public void close() {
+        tcpMap.remove(channelIndex);
+        if (!indexBufs.isEmpty()) {
+            indexBufs.forEach(indexBuf -> indexBuf.byteBuf.release());
+        }
+        writeToUdp(new EmptyByteBuf(Buf.alloc));//通知对方端数据结尾
     }
 
     @Override
     public void channelInactive(ChannelHandlerContext ctx) throws Exception {
-        tcpMap.remove(channelIndex);
-        writeToUdp(new EmptyByteBuf(Buf.alloc));//通知服务端数据结尾
+        close();
         super.channelInactive(ctx);
     }
 }

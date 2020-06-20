@@ -74,11 +74,11 @@ public class Netty {
         bindFuture.addListener(future -> {
             if (future.isSuccess()) {
                 bindFuture.channel().closeFuture().addListener(close -> {
-                    logger.info("udp shutdownGracefully because closed port:", port);
+                    logger.info("udp shutdownGracefully because closed port:{}", port);
                     group.shutdownGracefully();
                 });
             } else {//绑定失败
-                logger.info("udp shutdownGracefully because bind fail port:", port);
+                logger.info("udp shutdownGracefully because bind fail port:{}", port);
                 group.shutdownGracefully();
             }
         });

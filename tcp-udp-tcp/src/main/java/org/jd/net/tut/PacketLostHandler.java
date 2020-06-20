@@ -42,6 +42,9 @@ public class PacketLostHandler extends ChannelDuplexHandler {
          * 复制一个 DatagramPacket 用于发送
          */
         public DatagramPacket packet() {
+            if (sendTimes > 50) {
+                throw new IllegalStateException("重发次数超过50");
+            }
             sendTime = System.currentTimeMillis();
             sendTimes++;
             return packet.replace(packet.content().retainedSlice());
@@ -105,14 +108,16 @@ public class PacketLostHandler extends ChannelDuplexHandler {
         int index = packet.content().readInt();
 
         if (index == responseFlag) {//收到对方的响应
-            DataInfo dataInfo = dataMap.get(index);
+            int realIndex = packet.content().readInt();
+            logger.info("收到响应 {}", realIndex);
+            DataInfo dataInfo = dataMap.get(realIndex);
             if (dataInfo.respTime == 0)//只记录第一次收到响应的时间
                 dataInfo.respTime = System.currentTimeMillis();
             packet.release();
             return;
         }
 
-        udp.channel().writeAndFlush(Buf.wrap(responseFlag, index));//发送响应，告诉另一端的udp已经接收到包
+        udp.writeAndFlush(Buf.wrap(responseFlag, index));//发送响应，告诉另一端的udp已经接收到包
 
         if (index <= consumedIndexMin || consumedIndex.contains(index)) {//收到重复包
             packet.release();
@@ -137,4 +142,15 @@ public class PacketLostHandler extends ChannelDuplexHandler {
         consumedIndex.removeAll(toRemove);
     }
 
+    @Override
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+        logger.error("异常", cause);
+        ctx.close();
+    }
+
+    @Override
+    public void channelInactive(ChannelHandlerContext ctx) throws Exception {
+        resendThread.interrupt();
+        super.channelInactive(ctx);
+    }
 }
