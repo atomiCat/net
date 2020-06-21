@@ -9,6 +9,8 @@ import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
 import org.jd.net.core.Buf;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Iterator;
 import java.util.TreeSet;
@@ -20,6 +22,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * 将读到的 tcp 包添加channelIndex和dataIndex，通过ucp发送出去
  */
 public class TcpUdpTransfer extends ChannelDuplexHandler {
+    private final Logger logger = LoggerFactory.getLogger(getClass());
     private static final AtomicInteger channelIndexFactor = new AtomicInteger(0);
     private final int channelIndex = channelIndexFactor.getAndAdd(1);
     private final ConcurrentHashMap<Integer, Channel> tcpMap;
@@ -49,6 +52,7 @@ public class TcpUdpTransfer extends ChannelDuplexHandler {
                         Buf.wrap(channelIndex, dataIndexFactor.getAndAdd(1)),
                         buf
                 );
+        logger.info("发送数据：channelIndex {} dataIndex {}", cbuf.getInt(cbuf.readerIndex()), cbuf.getInt(cbuf.readerIndex() + 4));
         udp.writeAndFlush(cbuf);
     }
 

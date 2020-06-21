@@ -6,6 +6,8 @@ import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
 import io.netty.channel.socket.DatagramPacket;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
 import java.util.concurrent.ConcurrentHashMap;
@@ -46,11 +48,16 @@ public class UdpTcpTransfer extends ChannelDuplexHandler {
         write2Tcp(buf);
     }
 
+    final Logger logger = LoggerFactory.getLogger(getClass());
+
     protected void write2Tcp(ByteBuf buf) {
-        Channel tcp = tcpMap.get(buf.readInt());//根据channelIndex选择合适的tcp连接
+        int channelIndex = buf.readInt();
+        logger.info("写入tcp channelIndex {} daaIndex {}", channelIndex, buf.getInt(buf.readerIndex()));
+        Channel tcp = tcpMap.get(channelIndex);//根据channelIndex选择合适的tcp连接
         if (tcp != null) {
             tcp.writeAndFlush(buf);
         } else {
+            logger.warn("写入tcp 失败！");
             buf.release();
         }
     }

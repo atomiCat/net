@@ -64,7 +64,7 @@ public class PacketLostHandler extends ChannelDuplexHandler {
         dataQueue.offer(dataInfo);
         dataMap.put(dataInfo.index, dataInfo);
         udp.write(dataInfo.packet());
-        super.write(udp, msg, promise);
+//        super.write(udp, msg, promise);
     }
 
     private Thread resendThread;
@@ -74,7 +74,7 @@ public class PacketLostHandler extends ChannelDuplexHandler {
         resendThread = new Thread(() -> {
             try {
                 while (true) {
-                    TimeUnit.MILLISECONDS.sleep(10);
+                    TimeUnit.MILLISECONDS.sleep(1000);
                     int sent = 0, count = dataMap.size();
                     for (DataInfo dataInfo = dataQueue.peek(); dataInfo != null && System.currentTimeMillis() - dataInfo.sendTime > 200; dataInfo = dataQueue.peek()) {
                         dataQueue.poll();//移除头部
