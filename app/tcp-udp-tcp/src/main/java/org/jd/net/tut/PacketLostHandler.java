@@ -9,9 +9,7 @@ import org.jd.net.core.Buf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.TreeSet;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
@@ -23,8 +21,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  * 接收到重复的包去重
  */
 public class PacketLostHandler extends ChannelDuplexHandler {
-    static Logger logger = LoggerFactory.getLogger(PacketLostHandler.class);
-    static final int responseFlag = -556315684;//必须小于0
+    private static Logger logger = LoggerFactory.getLogger(PacketLostHandler.class);
+    private static final int responseFlag = -556315684;//必须小于0
 
     static class DataInfo {
         private final DatagramPacket packet;
@@ -40,12 +38,13 @@ public class PacketLostHandler extends ChannelDuplexHandler {
 
         /**
          * 复制一个 DatagramPacket 用于发送
+         * 并更新 sendTime
          */
         public DatagramPacket packet() {
             if (sendTimes > 50) {
                 throw new IllegalStateException("重发次数超过50");
             }
-            sendTime = System.currentTimeMillis();
+            this.sendTime = System.currentTimeMillis();
             sendTimes++;
             return packet.replace(packet.content().retainedSlice());
         }
@@ -64,33 +63,43 @@ public class PacketLostHandler extends ChannelDuplexHandler {
         dataQueue.offer(dataInfo);
         dataMap.put(dataInfo.index, dataInfo);
         udp.write(dataInfo.packet());
-//        super.write(udp, msg, promise);
     }
 
     private Thread resendThread;
+    private long netDelay = 200;
 
     @Override
     public void channelActive(ChannelHandlerContext udp) throws Exception {
         resendThread = new Thread(() -> {
             try {
                 while (true) {
-                    TimeUnit.MILLISECONDS.sleep(1000);
-                    int sent = 0, count = dataMap.size();
-                    for (DataInfo dataInfo = dataQueue.peek(); dataInfo != null && System.currentTimeMillis() - dataInfo.sendTime > 200; dataInfo = dataQueue.peek()) {
-                        dataQueue.poll();//移除头部
+                    List<DataInfo> tail = new ArrayList<>();//丢包重发后放到队列尾部
+                    int sent = 0, count = 0;
+                    for (; !dataQueue.isEmpty(); count++) {
+                        DataInfo dataInfo = dataQueue.poll();//移除头部
+                        long sleep = netDelay - (System.currentTimeMillis() - dataInfo.sendTime);
+                        if (sleep > 0) {
+                            udp.flush();
+                            TimeUnit.MILLISECONDS.sleep(sleep);
+                        }
+
                         if (dataInfo.respTime == 0) {//没有响应
-                            udp.channel().write(dataInfo.packet());//重发
-                            dataQueue.offer(dataInfo);//放到队列尾部
+                            logger.info("重发 {}", dataInfo.index);
+                            udp.write(dataInfo.packet());//重发
+                            tail.add(dataInfo);//放到队列尾部
                             sent++;
                         } else {//已响应
+                            logger.info("已响应 {}", dataInfo.index);
                             dataInfo.packet.release();
                             dataMap.remove(dataInfo.index);
                         }
                     }
                     if (sent > 0) {
-                        udp.channel().flush();
+                        tail.forEach(dataQueue::offer);
+                        udp.flush();
                         logger.info("丢包重发：{}/{} ", sent, count);
                     }
+
                 }
             } catch (InterruptedException e) {
             }
@@ -100,7 +109,7 @@ public class PacketLostHandler extends ChannelDuplexHandler {
     }
 
     private TreeSet<Integer> consumedIndex = new TreeSet<>();//已经消费掉的
-    private Integer consumedIndexMin = 0;//index小于此值的包会被忽略
+    private Integer consumedIndexMin = -1;//index小于等于此值的包会被忽略
 
     @Override
     public void channelRead(ChannelHandlerContext udp, Object msg) throws Exception {
@@ -115,11 +124,14 @@ public class PacketLostHandler extends ChannelDuplexHandler {
                 dataInfo.respTime = System.currentTimeMillis();
             packet.release();
             return;
+        } else {
+            logger.info("收到udp包 index={}", index);
         }
 
-        udp.writeAndFlush(Buf.wrap(responseFlag, index));//发送响应，告诉另一端的udp已经接收到包
+        udp.writeAndFlush(new DatagramPacket(Buf.wrap(responseFlag, index), packet.sender()));//发送响应，告诉另一端的udp已经接收到包
 
         if (index <= consumedIndexMin || consumedIndex.contains(index)) {//收到重复包
+            logger.info("重复消费：index={}",index);
             packet.release();
             return;
         }
@@ -140,12 +152,6 @@ public class PacketLostHandler extends ChannelDuplexHandler {
             that = next;
         }
         consumedIndex.removeAll(toRemove);
-    }
-
-    @Override
-    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
-        logger.error("异常", cause);
-        ctx.close();
     }
 
     @Override

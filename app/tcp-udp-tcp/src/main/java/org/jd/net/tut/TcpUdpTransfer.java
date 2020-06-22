@@ -52,7 +52,7 @@ public class TcpUdpTransfer extends ChannelDuplexHandler {
                         Buf.wrap(channelIndex, dataIndexFactor.getAndAdd(1)),
                         buf
                 );
-        logger.info("发送数据：channelIndex {} dataIndex {}", cbuf.getInt(cbuf.readerIndex()), cbuf.getInt(cbuf.readerIndex() + 4));
+        logger.info("发送数据->udp：channelIndex {} dataIndex {}", cbuf.getInt(cbuf.readerIndex()), cbuf.getInt(cbuf.readerIndex() + 4));
         udp.writeAndFlush(cbuf);
     }
 

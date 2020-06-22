@@ -14,7 +14,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 添加到udp pipeline中
- * 将读到的udp包readInt作为index，从tcpMap中取出tcp连接 并写入数据
+ * 将读到的udp包readInt作为index，从tcpMap中取出tcp连接 并写入数据,不保证顺序
  */
 public class UdpTcpTransfer extends ChannelDuplexHandler {
     private InetSocketAddress remote;
@@ -52,7 +52,7 @@ public class UdpTcpTransfer extends ChannelDuplexHandler {
 
     protected void write2Tcp(ByteBuf buf) {
         int channelIndex = buf.readInt();
-        logger.info("写入tcp channelIndex {} daaIndex {}", channelIndex, buf.getInt(buf.readerIndex()));
+        logger.info("写入数据->tcp channelIndex {} daaIndex {}", channelIndex, buf.getInt(buf.readerIndex()));
         Channel tcp = tcpMap.get(channelIndex);//根据channelIndex选择合适的tcp连接
         if (tcp != null) {
             tcp.writeAndFlush(buf);
@@ -60,5 +60,13 @@ public class UdpTcpTransfer extends ChannelDuplexHandler {
             logger.warn("写入tcp 失败！");
             buf.release();
         }
+    }
+
+    @Override
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
+        logger.error("异常", cause);
+        ctx.close();
+        ctx.fireExceptionCaught(cause);
+        System.exit(0);
     }
 }
