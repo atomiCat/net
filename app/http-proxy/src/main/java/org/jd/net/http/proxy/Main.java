@@ -2,6 +2,7 @@ package org.jd.net.http.proxy;
 
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelInitializer;
+import io.netty.channel.ChannelOption;
 import org.jd.net.core.ChannelEvent;
 import org.jd.net.core.CloseOnIOException;
 import org.jd.net.core.DuplexTransfer;
@@ -21,7 +22,7 @@ public class Main {
     }
 
     static void clientStart(int port, String sHost, int sPort, String password) {
-        Netty.accept(port, new ChannelInitializer<Channel>() {
+        Channel channel = Netty.accept(port, new ChannelInitializer<Channel>() {
             @Override
             protected void initChannel(Channel ch) throws Exception {
                 ch.pipeline().addLast(
@@ -32,12 +33,15 @@ public class Main {
                         CloseOnIOException.handler
                 );
             }
-        }).syncUninterruptibly().channel().closeFuture().syncUninterruptibly();
+        }).channel();
+        channel.config().setOption(ChannelOption.TCP_NODELAY, true);
+        channel.config().setOption(ChannelOption.SO_SNDBUF, 1024*512);
+        channel.closeFuture().syncUninterruptibly();
 
     }
 
     static void serverStart(int port, String password) {
-        Netty.accept(port, new ChannelInitializer<Channel>() {
+        Channel channel = Netty.accept(port, new ChannelInitializer<Channel>() {
             @Override
             protected void initChannel(Channel ch) throws Exception {
                 ch.pipeline().addLast(
@@ -50,7 +54,10 @@ public class Main {
                 logger.info("serverStart success {}", port);
             else
                 logger.error("serverStart fail", future.cause());
-        }).syncUninterruptibly().channel().closeFuture().syncUninterruptibly();
+        }).channel();
+        channel.config().setOption(ChannelOption.TCP_NODELAY, true);
+        channel.config().setOption(ChannelOption.SO_SNDBUF, 1024*512);
+        channel.closeFuture().syncUninterruptibly();
     }
 
 }
