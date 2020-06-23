@@ -41,7 +41,7 @@ public class PacketLostHandler extends ChannelDuplexHandler {
          * 并更新 sendTime
          */
         public DatagramPacket packet() {
-            if (sendTimes > 50) {
+            if (sendTimes > 10) {
                 throw new IllegalStateException("重发次数超过50");
             }
             this.sendTime = System.currentTimeMillis();
@@ -89,7 +89,7 @@ public class PacketLostHandler extends ChannelDuplexHandler {
                             tail.add(dataInfo);//放到队列尾部
                             sent++;
                         } else {//已响应
-                            logger.info("已响应 {}", dataInfo.index);
+//                            logger.info("已响应,dataMap.remove {}", dataInfo.index);
                             dataInfo.packet.release();
                             dataMap.remove(dataInfo.index);
                         }
@@ -114,24 +114,25 @@ public class PacketLostHandler extends ChannelDuplexHandler {
     @Override
     public void channelRead(ChannelHandlerContext udp, Object msg) throws Exception {
         DatagramPacket packet = (DatagramPacket) msg;
-        int index = packet.content().readInt();
+        int index = packet.content().readInt();//dataIndex
 
         if (index == responseFlag) {//收到对方的响应
             int realIndex = packet.content().readInt();
-            logger.info("收到响应 {}", realIndex);
+//            logger.info("收到响应 {}", realIndex);
             DataInfo dataInfo = dataMap.get(realIndex);
-            if (dataInfo.respTime == 0)//只记录第一次收到响应的时间
+            //同一 dataIndex 可能收到多次响应
+            if (dataInfo != null && dataInfo.respTime == 0)//只记录第一次收到响应的时间
                 dataInfo.respTime = System.currentTimeMillis();
             packet.release();
             return;
         } else {
-            logger.info("收到udp包 index={}", index);
+//            logger.info("收到udp包 index={}", index);
         }
 
         udp.writeAndFlush(new DatagramPacket(Buf.wrap(responseFlag, index), packet.sender()));//发送响应，告诉另一端的udp已经接收到包
 
         if (index <= consumedIndexMin || consumedIndex.contains(index)) {//收到重复包
-            logger.info("重复消费：index={}",index);
+            logger.info("收到重复包：index={}", index);
             packet.release();
             return;
         }

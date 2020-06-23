@@ -1,6 +1,5 @@
 package org.jd.net.tut;
 
-import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandlerContext;
@@ -10,7 +9,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
-import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class Main {
@@ -70,16 +68,11 @@ public class Main {
                 logger.info("udp server udpListenPort {} -> {}:{}", udpListenPort, host, port);
                 super.channelActive(ctx);
             }
-            TreeSet<Integer> closedChannelIndex;
+
             @Override
-            protected void write2Tcp(ByteBuf buf) {
-                tcpMap.computeIfAbsent(buf.readInt(), integer -> {
-                    TcpUdpTransfer tcpUdpTransfer = new TcpUdpTransfer(tcpMap, udpServer){
-                        @Override
-                        public void close() {
-                            super.close();
-                        }
-                    };
+            protected Channel getTcpChannel(Integer channelIndex) {
+                return tcpMap.computeIfAbsent(channelIndex, i -> {
+                    TcpUdpTransfer tcpUdpTransfer = new TcpUdpTransfer(tcpMap, udpServer);
                     ChannelFuture future = Netty.connect(host, port, tcpUdpTransfer);
                     future.addListener(future1 -> {
                         if (!future1.isSuccess()) {
@@ -88,7 +81,7 @@ public class Main {
                         }
                     });
                     return future.channel();
-                }).writeAndFlush(buf);
+                });
             }
         }).channel();
         udpServer.closeFuture().syncUninterruptibly();

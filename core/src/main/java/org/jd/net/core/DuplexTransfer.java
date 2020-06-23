@@ -77,7 +77,7 @@ public class DuplexTransfer extends ChannelInboundHandlerAdapter {
             }
         }).addListener(future -> {
             if (!future.isSuccess())
-                ctx.close();//连接失败，关闭
+                ctx.channel().close();//连接失败，关闭
         });
     }
 

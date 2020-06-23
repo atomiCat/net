@@ -52,7 +52,7 @@ public class TcpUdpTransfer extends ChannelDuplexHandler {
                         Buf.wrap(channelIndex, dataIndexFactor.getAndAdd(1)),
                         buf
                 );
-        logger.info("发送数据->udp：channelIndex {} dataIndex {}", cbuf.getInt(cbuf.readerIndex()), cbuf.getInt(cbuf.readerIndex() + 4));
+//        logger.info("发送数据->udp：channelIndex {} dataIndex {}", cbuf.getInt(cbuf.readerIndex()), cbuf.getInt(cbuf.readerIndex() + 4));
         udp.writeAndFlush(cbuf);
     }
 
@@ -66,17 +66,20 @@ public class TcpUdpTransfer extends ChannelDuplexHandler {
         super.channelActive(ctx);
     }
 
-    TreeSet<IndexBuf> indexBufs = new TreeSet<>();
+    TreeSet<IndexBuf> indexBufs = new TreeSet<>();//存放已经收到的数据包并排序
     private int lastConsumedIndex = -1;
 
     @Override//将udp写来的包排序
     public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
-        if (msg instanceof ByteBuf) {
-            ByteBuf buf = (ByteBuf) msg;
-            indexBufs.add(new IndexBuf(buf.readInt(), buf));
+        if (msg != null) {
+            ByteBuf byteBuf = (ByteBuf) msg;
+            indexBufs.add(new IndexBuf(byteBuf.readInt(), byteBuf));
+            if (channelNotActive) {
+//                logger.info("tcp未准备好，indexBufs {} readableBytes {}", indexBufs.size(), byteBuf.readableBytes());
+                return;
+            }
         }
-        if (channelNotActive)
-            return;
+
         //将indexBufs数据发送到tcp
         Iterator<IndexBuf> iterator = indexBufs.iterator();
         while (iterator.hasNext()) {
@@ -88,25 +91,34 @@ public class TcpUdpTransfer extends ChannelDuplexHandler {
                     else
                         ctx.write(buf.byteBuf, promise);
                 } else {
+                    logger.info("收到关闭信号 channelIndex {}", channelIndex);
                     ctx.flush();
                     buf.byteBuf.release();
-                    ctx.close();
+                    ctx.channel().close();
                 }
-                lastConsumedIndex = buf.index;
+                lastConsumedIndex++;
                 iterator.remove();
             }
         }
+        ctx.flush();
     }
+
 
     /**
      * 清理资源
      */
     public void close() {
+        if (ClosedChannelMarker.isClosed(channelIndex))
+            return;//已经清理过，无需重复清理
+
+        logger.info("tcp关闭，清理资源 channelIndex {} indexBufs {} ");
         tcpMap.remove(channelIndex);
         if (!indexBufs.isEmpty()) {
             indexBufs.forEach(indexBuf -> indexBuf.byteBuf.release());
         }
         writeToUdp(new EmptyByteBuf(Buf.alloc));//通知对方端数据结尾
+
+        ClosedChannelMarker.mark(channelIndex);
     }
 
     @Override

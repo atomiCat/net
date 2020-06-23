@@ -15,7 +15,7 @@ public class CloseOnIOException extends ChannelInboundHandlerAdapter {
 
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
-        ctx.close();
+        ctx.channel().close();
         if (!(cause instanceof IOException))
             logger.error("", cause);
     }

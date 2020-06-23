@@ -34,9 +34,11 @@ public class UdpTcpTransfer extends ChannelDuplexHandler {
 
     @Override
     public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
-        if (msg instanceof ByteBuf)
-            msg = new DatagramPacket((ByteBuf) msg, remote);
-        super.write(ctx, msg, promise);
+        ByteBuf buf = (ByteBuf) msg;
+        while (buf.readableBytes() > 1024) {
+            ctx.write(new DatagramPacket(buf.readRetainedSlice(1024), remote), promise);
+        }
+        ctx.write(new DatagramPacket(buf, remote), promise);
     }
 
     @Override
@@ -45,27 +47,36 @@ public class UdpTcpTransfer extends ChannelDuplexHandler {
         if (remote == null)
             remote = datagramPacket.sender();
         ByteBuf buf = (datagramPacket).content();
-        write2Tcp(buf);
+        int index = buf.readInt();//channelIndex
+        if (ClosedChannelMarker.isClosed(index)) {
+            if (buf.readableBytes() > 4)//==4说明是关闭信号
+                logger.info("write2Tcp 失败，tcp已关闭 channelIdx:{} dataIdx:{} readable:{}", index, buf.readInt(), buf.readableBytes());
+            buf.release();
+            return;
+        }
+        write2Tcp(buf, index);
     }
 
     final Logger logger = LoggerFactory.getLogger(getClass());
 
-    protected void write2Tcp(ByteBuf buf) {
-        int channelIndex = buf.readInt();
-        logger.info("写入数据->tcp channelIndex {} daaIndex {}", channelIndex, buf.getInt(buf.readerIndex()));
-        Channel tcp = tcpMap.get(channelIndex);//根据channelIndex选择合适的tcp连接
+    private void write2Tcp(ByteBuf buf, int channelIndex) {
+        logger.info("写入数据->tcp channelIndex {} dataIndex {}", channelIndex, buf.getInt(buf.readerIndex()));
+        Channel tcp = getTcpChannel(channelIndex);//根据channelIndex选择合适的tcp连接
         if (tcp != null) {
             tcp.writeAndFlush(buf);
         } else {
-            logger.warn("写入tcp 失败！");
-            buf.release();
+            throw new IllegalStateException("写入数据->tcp异常:tcp==null");
         }
+    }
+
+    protected Channel getTcpChannel(Integer channelIndex) {
+        return tcpMap.get(channelIndex);
     }
 
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
         logger.error("异常", cause);
-        ctx.close();
+        ctx.channel().close();
         ctx.fireExceptionCaught(cause);
         System.exit(0);
     }
