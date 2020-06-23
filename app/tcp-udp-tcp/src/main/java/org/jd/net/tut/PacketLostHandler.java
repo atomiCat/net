@@ -41,7 +41,7 @@ public class PacketLostHandler extends ChannelDuplexHandler {
          * 并更新 sendTime
          */
         public DatagramPacket packet() {
-            if (sendTimes > 10) {
+            if (sendTimes > 100) {
                 throw new IllegalStateException("重发次数超过50");
             }
             this.sendTime = System.currentTimeMillis();
@@ -84,7 +84,7 @@ public class PacketLostHandler extends ChannelDuplexHandler {
                         }
 
                         if (dataInfo.respTime == 0) {//没有响应
-                            logger.info("重发 {}", dataInfo.index);
+//                            logger.info("重发 {}", dataInfo.index);
                             udp.write(dataInfo.packet());//重发
                             tail.add(dataInfo);//放到队列尾部
                             sent++;

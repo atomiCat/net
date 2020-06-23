@@ -35,17 +35,16 @@ public class UdpTcpTransfer extends ChannelDuplexHandler {
     @Override
     public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
         ByteBuf buf = (ByteBuf) msg;
-        while (buf.readableBytes() > 1024) {
-            ctx.write(new DatagramPacket(buf.readRetainedSlice(1024), remote), promise);
-        }
+//        logger.info("写入udp数据：remote:{} dataLength: {}", remote, buf.readableBytes());
         ctx.write(new DatagramPacket(buf, remote), promise);
     }
 
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
         DatagramPacket datagramPacket = (DatagramPacket) msg;
-        if (remote == null)
-            remote = datagramPacket.sender();
+        remote = datagramPacket.sender();
+//        logger.info("收到udp数据：remote:{} dataLength: {}", remote, datagramPacket.content().readableBytes());
+
         ByteBuf buf = (datagramPacket).content();
         int index = buf.readInt();//channelIndex
         if (ClosedChannelMarker.isClosed(index)) {
@@ -60,7 +59,7 @@ public class UdpTcpTransfer extends ChannelDuplexHandler {
     final Logger logger = LoggerFactory.getLogger(getClass());
 
     private void write2Tcp(ByteBuf buf, int channelIndex) {
-        logger.info("写入数据->tcp channelIndex {} dataIndex {}", channelIndex, buf.getInt(buf.readerIndex()));
+//        logger.info("写入数据->tcp channelIndex {} dataIndex {}", channelIndex, buf.getInt(buf.readerIndex()));
         Channel tcp = getTcpChannel(channelIndex);//根据channelIndex选择合适的tcp连接
         if (tcp != null) {
             tcp.writeAndFlush(buf);

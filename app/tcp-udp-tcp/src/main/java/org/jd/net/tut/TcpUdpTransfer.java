@@ -43,7 +43,12 @@ public class TcpUdpTransfer extends ChannelDuplexHandler {
 
     @Override//添加channelIndex 和 dataIndex
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
-        writeToUdp((ByteBuf) msg);
+        ByteBuf buf = (ByteBuf) msg;
+        while (buf.readableBytes() > 1024) {
+//            logger.info("数据分段,buf.readableBytes: {}");
+            writeToUdp(buf.readRetainedSlice(1024));
+        }
+        writeToUdp(buf);
     }
 
     private void writeToUdp(ByteBuf buf) {
@@ -86,10 +91,7 @@ public class TcpUdpTransfer extends ChannelDuplexHandler {
             IndexBuf buf = iterator.next();
             if (buf.index == lastConsumedIndex + 1) {
                 if (buf.byteBuf.isReadable()) {
-                    if (promise == null)
-                        ctx.write(buf.byteBuf);
-                    else
-                        ctx.write(buf.byteBuf, promise);
+                    ctx.write(buf.byteBuf);
                 } else {
                     logger.info("收到关闭信号 channelIndex {}", channelIndex);
                     ctx.flush();
