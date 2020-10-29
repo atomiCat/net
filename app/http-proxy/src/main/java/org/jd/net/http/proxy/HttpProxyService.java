@@ -4,6 +4,7 @@ import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.netty.util.ResourceLeakDetector;
 import org.apache.commons.lang3.StringUtils;
 import org.jd.net.core.*;
 import org.slf4j.Logger;
@@ -89,7 +90,7 @@ public class HttpProxyService extends SplitHandler {
                         String prefix = frame.getCharSequence(frame.readerIndex(), "Proxy-".length(), StandardCharsets.US_ASCII).toString();
                         if (prefix.equalsIgnoreCase("Proxy-")) {//处理Proxy-开头的请求头，例如 Proxy-Connection: Keep-Alive 转为 Connection: Keep-Alive
                             frame.readerIndex(frame.readerIndex() + "Proxy-".length());
-                            Buf.print("请求头转换后", frame);
+                            logger.info("请求头转换后 {}", Buf.toString(frame));
                         }
                     }
                     dataToServer.add(frame);

@@ -21,7 +21,7 @@ public class Main {
         }
     }
 
-    static void clientStart(int port, String sHost, int sPort, String password) {
+    public static void clientStart(int port, String sHost, int sPort, String password) {
         Channel channel = Netty.accept(port, new ChannelInitializer<Channel>() {
             @Override
             protected void initChannel(Channel ch) throws Exception {
@@ -40,7 +40,7 @@ public class Main {
 
     }
 
-    static void serverStart(int port, String password) {
+    public static void serverStart(int port, String password) {
         Channel channel = Netty.accept(port, new ChannelInitializer<Channel>() {
             @Override
             protected void initChannel(Channel ch) throws Exception {

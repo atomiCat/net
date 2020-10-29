@@ -34,7 +34,7 @@ public class Main {
                 return;
             }
         }
-        logger.info("配置文件：{}", file.getAbsolutePath());
+        logger.info("read config from : {}", file.getAbsolutePath());
         BufferedReader reader = new BufferedReader(new FileReader(file));
         reader.lines().forEach(line -> {
             if (line.length() == 0)
