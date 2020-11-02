@@ -7,27 +7,34 @@ import io.netty.channel.ChannelInboundHandlerAdapter;
 public class Transfer extends ChannelInboundHandlerAdapter {
     private final Channel target;
     private final boolean closeOnInactive;
+    private final boolean autoReadOnActive;
 
     public Transfer(Channel target) {
-        this.target = target;
-        closeOnInactive = true;
-    }
-
-    @Deprecated
-    public Transfer(ChannelHandlerContext target) {
-        this.target = target.channel();
-        closeOnInactive = true;
+        this(target, false, true);
     }
 
     /**
      * 将读到的数据写到 target 中
      *
-     * @param target          target
-     * @param closeOnInactive channelInactive 事件触发时关闭 target，默认为true
+     * @param target           target
+     * @param autoReadOnActive channelActive 事件触发时调用 target.config().setAutoRead(true)  默认为false
+     * @param closeOnInactive  channelInactive 事件触发时调用 target.close() ，默认为true
      */
-    public Transfer(Channel target, boolean closeOnInactive) {
+    public Transfer(Channel target, boolean autoReadOnActive, boolean closeOnInactive) {
         this.target = target;
+        this.autoReadOnActive = autoReadOnActive;
         this.closeOnInactive = closeOnInactive;
+    }
+
+
+    public Transfer(Channel target, boolean autoReadOnActive) {
+        this(target, autoReadOnActive, true);
+    }
+
+    @Override
+    public void channelActive(ChannelHandlerContext ctx) throws Exception {
+        target.config().setAutoRead(true);
+        super.channelActive(ctx);
     }
 
     @Override

@@ -1,10 +1,8 @@
 package org.jd.net.http.proxy;
 
 import io.netty.buffer.ByteBuf;
-import io.netty.channel.ChannelHandler;
+import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelInboundHandlerAdapter;
-import io.netty.util.ResourceLeakDetector;
 import org.apache.commons.lang3.StringUtils;
 import org.jd.net.core.*;
 import org.slf4j.Logger;
@@ -41,15 +39,6 @@ public class HttpProxyService extends SplitHandler {
     private enum State {init, connect, http, body}
 
     private ArrayList<ByteBuf> dataToServer = new ArrayList<>();//要发往服务端的数据
-    ChannelHandler dataToServerHandler = new ChannelInboundHandlerAdapter() {
-        @Override
-        public void channelActive(ChannelHandlerContext ctx) throws Exception {
-            dataToServer.forEach(ctx::write);
-            ctx.flush();
-            dataToServer = null;
-            super.channelActive(ctx);
-        }
-    };
 
     private String host;
     private int port;
@@ -102,36 +91,32 @@ public class HttpProxyService extends SplitHandler {
         }
         if (state == State.body) {//剩余数据发送到服务端
             dataToServer.add(remains.retainedSlice());
-            remains.clear().release();
+            remains.release();
 
-            ctx.pipeline().addLast(
-                    new DuplexTransfer(host, port, ChannelEvent.handlerAdded, dataToServerHandler, CloseOnIOException.handler)
-                            .stopAutoRead(ctx.channel())//停止自动读，等连接到服务端后再继续读
-            );
+            Channel client = ctx.channel();
+            client.config().setAutoRead(false);//暂停自动读，等连接到服务器再继续
+            client.pipeline().remove(this);
+
+            Netty.connect(host, port, server -> {
+                server.pipeline().addLast(new Transfer(client, true), Handlers.active(c -> {
+                    dataToServer.forEach(server::write);//剩余数据发送到服务端
+                    server.flush();
+                    dataToServer.clear();
+                }), Handlers.closeOnIOException);
+                client.pipeline().addLast(new Transfer(server));//已经有 Handlers.closeOnIOException 了
+            });
         }
     }
 
     @Override
     public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
-        ctx.pipeline().addLast(CloseOnIOException.handler);
+        ctx.pipeline().addLast(Handlers.closeOnIOException);
         super.handlerAdded(ctx);
     }
 
     @Override
-    public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
-//        Buf.print("channelRead===", (ByteBuf) msg);
-        if (state == State.body) {
-            ctx.fireChannelRead(msg);
-        } else {
-            split(ctx, (ByteBuf) msg);
-        }
-    }
-
-    @Override
     public void channelInactive(ChannelHandlerContext ctx) throws Exception {
-        if (dataToServer != null)
-            dataToServer.forEach(ByteBuf::release);
-//        System.gc();
+        dataToServer.forEach(ByteBuf::release);
         super.channelInactive(ctx);
     }
 
