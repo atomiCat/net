@@ -2,10 +2,7 @@ package org.jd.net.core;
 
 import io.netty.bootstrap.Bootstrap;
 import io.netty.bootstrap.ServerBootstrap;
-import io.netty.channel.Channel;
-import io.netty.channel.ChannelFuture;
-import io.netty.channel.ChannelHandler;
-import io.netty.channel.EventLoopGroup;
+import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioDatagramChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
@@ -13,17 +10,27 @@ import io.netty.channel.socket.nio.NioSocketChannel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.function.Consumer;
+
 public class Netty {
     private static Logger logger = LoggerFactory.getLogger(Netty.class);
 
+    /**
+     * connect
+     *
+     * @param host
+     * @param port
+     * @param channelHandler
+     * @return
+     */
     public static ChannelFuture connect(String host, int port, ChannelHandler channelHandler) {
         logger.info("connect {}:{}", host, port);
         EventLoopGroup workerGroup = new NioEventLoopGroup(1);
-        Bootstrap b = new Bootstrap(); // (1)
-        b.group(workerGroup); // (2)
-        b.channel(NioSocketChannel.class); // (3)
+        Bootstrap b = new Bootstrap();
+        b.group(workerGroup);
+        b.channel(NioSocketChannel.class);
         b.handler(channelHandler);
-        ChannelFuture connectFuture = b.connect(host, port);// (5)
+        ChannelFuture connectFuture = b.connect(host, port);
         connectFuture.addListener(future -> {
             Channel channel = connectFuture.channel();
             if (future.isSuccess()) {
@@ -39,13 +46,47 @@ public class Netty {
         return connectFuture;
     }
 
+    /**
+     * connect
+     *
+     * @param initializer 初始化回调
+     * @return
+     */
+    public static ChannelFuture connect(String host, int port, Consumer<Channel> initializer) {
+        return connect(host, port, new ChannelInboundHandlerAdapter() {
+            @Override
+            public void channelRegistered(ChannelHandlerContext ctx) throws Exception {
+                try {
+                    initializer.accept(ctx.channel());
+                    super.channelRegistered(ctx);
+                } finally {//初始化结束，移除自己
+                    ctx.pipeline().remove(this);
+                }
+            }
+
+            @Override
+            public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+                logger.error("connect fail", cause);
+                ctx.channel().close();
+                super.exceptionCaught(ctx, cause);
+            }
+        });
+    }
+
+    /**
+     * accept
+     *
+     * @param port
+     * @param childHandler
+     * @return
+     */
     public static ChannelFuture accept(int port, ChannelHandler childHandler) {
 
-        EventLoopGroup bossGroup = new NioEventLoopGroup(1); // (1)
-        EventLoopGroup workerGroup = new NioEventLoopGroup();
-        ServerBootstrap b = new ServerBootstrap(); // (2)
+        EventLoopGroup bossGroup = new NioEventLoopGroup(2);
+        EventLoopGroup workerGroup = new NioEventLoopGroup(4);
+        ServerBootstrap b = new ServerBootstrap();
         b.group(bossGroup, workerGroup)
-                .channel(NioServerSocketChannel.class) // (3)
+                .channel(NioServerSocketChannel.class)
                 .childHandler(childHandler);
 
         ChannelFuture bindFuture = b.bind(port);
@@ -63,6 +104,21 @@ public class Netty {
             }
         });
         return bindFuture;
+    }
+
+    /**
+     *
+     * @param port
+     * @param childInitializer
+     * @return
+     */
+    public static ChannelFuture accept(int port, Consumer<Channel> childInitializer) {
+        return accept(port, new ChannelInitializer<Channel>() {
+            @Override
+            protected void initChannel(Channel ch) {
+                childInitializer.accept(ch);
+            }
+        });
     }
 
     public static ChannelFuture udp(int port, ChannelHandler handler) {

@@ -22,9 +22,9 @@ public class HttpProxyTest {
 
     @Before
     public void init() {
-        logger.info("ResourceLeakDetector.Level={}", ResourceLeakDetector.getLevel());
+//        logger.info("ResourceLeakDetector.Level={}", ResourceLeakDetector.getLevel());
         ResourceLeakDetector.setLevel(ResourceLeakDetector.Level.PARANOID);//设置资源泄露检查等级：最高等级
-        logger.info("ResourceLeakDetector.Level={}", ResourceLeakDetector.getLevel());
+//        logger.info("ResourceLeakDetector.Level={}", ResourceLeakDetector.getLevel());
     }
 
     int clientPort = 8000;
@@ -37,10 +37,11 @@ public class HttpProxyTest {
         new Thread(() -> Main.clientStart(clientPort, "127.0.0.1", serverPort, password)).start();
         CloseableHttpResponse response;
         try (CloseableHttpClient client = HttpClientBuilder.create().setProxy(new HttpHost("127.0.0.1", clientPort)).build()) {
-//            response = client.execute(new HttpGet("https://www.baidu.com/"));
-//            logger.info(EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8));
+            response = client.execute(new HttpGet("https://www.baidu.com/"));
 
-            response = client.execute(new HttpGet("http://wap.baidu.com/"));
+//            response = client.execute(new HttpGet("http://wap.baidu.com/"));
+
+
             logger.info("response {}", response.getStatusLine());
             logger.info(EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8));
         }

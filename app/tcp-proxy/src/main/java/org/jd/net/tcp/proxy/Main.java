@@ -1,10 +1,9 @@
 package org.jd.net.tcp.proxy;
 
-import io.netty.channel.*;
-import org.jd.net.core.ChannelEvent;
-import org.jd.net.core.CloseOnIOException;
-import org.jd.net.core.DuplexTransfer;
+import io.netty.channel.ChannelFuture;
+import org.jd.net.core.Handlers;
 import org.jd.net.core.Netty;
+import org.jd.net.core.Transfer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -50,27 +49,22 @@ public class Main {
         reader.close();
     }
 
-    private static ChannelFuture start(int listenPort, String host, int port) {
+    /**
+     * @param listenPort 本机监听端口
+     * @param host       被代理host
+     * @param port       被代理port
+     * @return
+     */
+    public static ChannelFuture start(int listenPort, String host, int port) {
         logger.info("启动tcp代理：{} --> {}:{}", listenPort, host, port);
-        return Netty.accept(listenPort, new ChannelInitializer<Channel>() {
-            @Override
-            protected void initChannel(Channel ch) {
-                logger.info("accepted({}): {}", listenPort, ch.remoteAddress());
-                ch.pipeline().addLast(
-                        new DuplexTransfer(
-                                host, port, ChannelEvent.channelActive, CloseOnIOException.handler,
-                                new ChannelInboundHandlerAdapter() {
-                                    @Override
-                                    public void channelActive(ChannelHandlerContext ctx) throws Exception {
-                                        Channel channel = ctx.channel();
-                                        logger.info("connect success {} --> {}", channel.localAddress(), channel.remoteAddress());
-                                        super.channelActive(ctx);
-                                    }
-                                }
-                        ).stopAutoRead(ch),
-                        CloseOnIOException.handler
-                );
-            }
+        return Netty.accept(listenPort, client -> {
+            logger.info("accepted({}): {}", listenPort, client.remoteAddress());
+            client.config().setAutoRead(false);//暂停自动读，等连接被代理端成功再继续读
+            Netty.connect(host, port, target -> {
+                target.pipeline().addLast(new Transfer(client), Handlers.closeOnIOException);
+                client.pipeline().addLast(new Transfer(target), Handlers.closeOnIOException);
+                client.config().setAutoRead(true);
+            });
         });
     }
 }

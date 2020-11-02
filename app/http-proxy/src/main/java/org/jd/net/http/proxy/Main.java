@@ -1,12 +1,10 @@
 package org.jd.net.http.proxy;
 
 import io.netty.channel.Channel;
-import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
-import org.jd.net.core.ChannelEvent;
-import org.jd.net.core.CloseOnIOException;
-import org.jd.net.core.DuplexTransfer;
+import org.jd.net.core.Handlers;
 import org.jd.net.core.Netty;
+import org.jd.net.core.Transfer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -22,41 +20,30 @@ public class Main {
     }
 
     public static void clientStart(int port, String sHost, int sPort, String password) {
-        Channel channel = Netty.accept(port, new ChannelInitializer<Channel>() {
-            @Override
-            protected void initChannel(Channel ch) throws Exception {
-                ch.pipeline().addLast(
-                        new DuplexTransfer(
-                                sHost, sPort, ChannelEvent.channelActive,
-                                new XorCodec(password), CloseOnIOException.handler
-                        ).stopAutoRead(ch),
-                        CloseOnIOException.handler
-                );
-            }
+        Channel channel = Netty.accept(port, client -> {
+            client.config().setAutoRead(false);//暂停自动读，等连接到代理服务器再继续
+            Netty.connect(sHost, sPort, proxy -> {
+                proxy.pipeline().addLast(new XorCodec(password), new Transfer(client), Handlers.closeOnIOException);
+                client.pipeline().addLast(new Transfer(proxy), Handlers.closeOnIOException);
+                client.config().setAutoRead(true);
+            });
         }).channel();
         channel.config().setOption(ChannelOption.TCP_NODELAY, true);
-        channel.config().setOption(ChannelOption.SO_SNDBUF, 1024*512);
+        channel.config().setOption(ChannelOption.SO_SNDBUF, 1024 * 512);
         channel.closeFuture().syncUninterruptibly();
 
     }
 
     public static void serverStart(int port, String password) {
-        Channel channel = Netty.accept(port, new ChannelInitializer<Channel>() {
-            @Override
-            protected void initChannel(Channel ch) throws Exception {
-                ch.pipeline().addLast(
-                        new XorCodec(password),
-                        new HttpProxyService()
-                );
-            }
-        }).addListener(future -> {
-            if (future.isSuccess())
-                logger.info("serverStart success {}", port);
-            else
-                logger.error("serverStart fail", future.cause());
-        }).channel();
+        Channel channel = Netty.accept(port, ch -> ch.pipeline().addLast(new XorCodec(password), new HttpProxyService()))
+                .addListener(future -> {
+                    if (future.isSuccess())
+                        logger.info("serverStart success {}", port);
+                    else
+                        logger.error("serverStart fail", future.cause());
+                }).channel();
         channel.config().setOption(ChannelOption.TCP_NODELAY, true);
-        channel.config().setOption(ChannelOption.SO_SNDBUF, 1024*512);
+        channel.config().setOption(ChannelOption.SO_SNDBUF, 1024 * 512);
         channel.closeFuture().syncUninterruptibly();
     }
 
