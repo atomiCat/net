@@ -1,4 +1,4 @@
-package org.jd.net.core;
+package org.jd.net.netty;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;

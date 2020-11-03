@@ -1,10 +1,9 @@
 package org.jd.test;
 
-import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.util.ResourceLeakDetector;
-import org.jd.net.core.Buf;
-import org.jd.net.core.Handlers;
-import org.jd.net.core.Netty;
+import org.jd.net.netty.Buf;
+import org.jd.net.netty.Netty;
+import org.jd.net.netty.handler.Handlers;
 import org.jd.net.tcp.proxy.Main;
 import org.junit.Test;
 import org.slf4j.Logger;

@@ -1,9 +1,9 @@
 package org.jd.net.tcp.proxy;
 
 import io.netty.channel.ChannelFuture;
-import org.jd.net.core.Handlers;
-import org.jd.net.core.Netty;
-import org.jd.net.core.Transfer;
+import org.jd.net.netty.handler.Handlers;
+import org.jd.net.netty.Netty;
+import org.jd.net.netty.handler.Transfer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

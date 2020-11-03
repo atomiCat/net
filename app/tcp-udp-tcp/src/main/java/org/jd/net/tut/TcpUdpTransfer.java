@@ -8,7 +8,7 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
-import org.jd.net.core.Buf;
+import org.jd.net.netty.Buf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

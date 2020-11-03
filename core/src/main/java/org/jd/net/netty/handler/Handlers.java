@@ -1,4 +1,4 @@
-package org.jd.net.core;
+package org.jd.net.netty.handler;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
@@ -11,6 +11,9 @@ import java.io.IOException;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
+/**
+ * Netty Handler工具类
+ */
 public interface Handlers {
     Logger logger = LoggerFactory.getLogger(Handlers.class);
     /**
@@ -35,6 +38,9 @@ public interface Handlers {
         }
     };
 
+    /**
+     * channelActive Handler
+     */
     static ChannelInboundHandler active(Consumer<ChannelHandlerContext> channelActive) {
         return new ChannelInboundHandlerAdapter() {
             @Override
@@ -44,6 +50,9 @@ public interface Handlers {
         };
     }
 
+    /**
+     * channelRead Handler
+     */
     static ChannelInboundHandler read(BiConsumer<ChannelHandlerContext, ByteBuf> channelRead) {
         return new ChannelInboundHandlerAdapter() {
             @Override

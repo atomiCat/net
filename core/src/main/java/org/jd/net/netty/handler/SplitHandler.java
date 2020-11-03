@@ -1,9 +1,10 @@
-package org.jd.net.core;
+package org.jd.net.netty.handler;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.CompositeByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
+import org.jd.net.netty.Buf;
 
 import java.nio.charset.StandardCharsets;
 

@@ -1,8 +1,7 @@
-package org.jd.net.core;
+package org.jd.net.netty.handler;
 
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
-import org.jd.net.core.handler.TargetDoOn;
 
 /**
  * 将读到的数据写到 target 中

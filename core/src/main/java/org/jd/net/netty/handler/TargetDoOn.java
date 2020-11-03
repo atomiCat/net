@@ -1,4 +1,4 @@
-package org.jd.net.core.handler;
+package org.jd.net.netty.handler;
 
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;

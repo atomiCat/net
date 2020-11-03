@@ -5,7 +5,7 @@ import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
 import org.apache.commons.lang3.RandomUtils;
-import org.jd.net.core.Buf;
+import org.jd.net.netty.Buf;
 
 import java.nio.charset.StandardCharsets;
 

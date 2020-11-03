@@ -4,7 +4,11 @@ import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import org.apache.commons.lang3.StringUtils;
-import org.jd.net.core.*;
+import org.jd.net.netty.Buf;
+import org.jd.net.netty.Netty;
+import org.jd.net.netty.handler.Handlers;
+import org.jd.net.netty.handler.SplitHandler;
+import org.jd.net.netty.handler.Transfer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
