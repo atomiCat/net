@@ -37,9 +37,8 @@ public class HttpProxyTest {
         new Thread(() -> Main.clientStart(clientPort, "127.0.0.1", serverPort, password)).start();
         CloseableHttpResponse response;
         try (CloseableHttpClient client = HttpClientBuilder.create().setProxy(new HttpHost("127.0.0.1", clientPort)).build()) {
-            response = client.execute(new HttpGet("https://www.baidu.com/"));
-
-//            response = client.execute(new HttpGet("http://wap.baidu.com/"));
+//            response = client.execute(new HttpGet("https://www.baidu.com/"));
+            response = client.execute(new HttpGet("http://wap.baidu.com/"));
 
 
             logger.info("response {}", response.getStatusLine());
