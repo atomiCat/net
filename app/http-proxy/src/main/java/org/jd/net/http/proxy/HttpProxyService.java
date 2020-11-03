@@ -98,7 +98,7 @@ public class HttpProxyService extends SplitHandler {
             client.pipeline().remove(this);
 
             Netty.connect(host, port, server -> {
-                server.pipeline().addLast(new Transfer(client, true), Handlers.active(c -> {
+                server.pipeline().addLast(Transfer.autoReadOnActive(client), Handlers.active(c -> {
                     dataToServer.forEach(server::write);//剩余数据发送到服务端
                     server.flush();
                     dataToServer.clear();

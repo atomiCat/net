@@ -23,7 +23,7 @@ public class Main {
         Channel channel = Netty.accept(port, client -> {
             client.config().setAutoRead(false);//暂停自动读，等连接到代理服务器再继续
             Netty.connect(sHost, sPort, proxy -> {
-                proxy.pipeline().addLast(new XorCodec(password), new Transfer(client,true), Handlers.closeOnIOException);
+                proxy.pipeline().addLast(new XorCodec(password), Transfer.autoReadOnActive(client), Handlers.closeOnIOException);
                 client.pipeline().addLast(new Transfer(proxy), Handlers.closeOnIOException);
             });
         }).channel();

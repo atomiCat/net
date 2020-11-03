@@ -61,8 +61,13 @@ public class Main {
             logger.info("accepted({}): {}", listenPort, client.remoteAddress());
             client.config().setAutoRead(false);//暂停自动读，等连接被代理端成功再继续读
             Netty.connect(host, port, target -> {
-                target.pipeline().addLast(new Transfer(client, true), Handlers.closeOnIOException);
+                target.pipeline().addLast(Transfer.autoReadOnActive(client), Handlers.closeOnIOException);
                 client.pipeline().addLast(new Transfer(target), Handlers.closeOnIOException);
+            }).addListener(future -> {
+                    if (!future.isSuccess()) {
+                    logger.info("连接失败，关闭 client {} 的连接", client.remoteAddress());
+                    client.close();
+                }
             });
         });
     }
