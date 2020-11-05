@@ -35,7 +35,7 @@ public class SplitHandler extends ChannelInboundHandlerAdapter {
     }
 
     /**
-     * 分割数据，处理粘包和合并数据
+     * 分割数据
      *
      * @param ctx
      * @param buffer
