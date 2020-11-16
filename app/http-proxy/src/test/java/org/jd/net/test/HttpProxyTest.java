@@ -15,10 +15,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 
 public class HttpProxyTest {
-    Logger logger = LoggerFactory.getLogger(HttpProxyTest.class);
+    private Logger logger = LoggerFactory.getLogger(HttpProxyTest.class);
 
     @Before
     public void init() {
@@ -37,12 +36,18 @@ public class HttpProxyTest {
         new Thread(() -> Main.clientStart(clientPort, "127.0.0.1", serverPort, password)).start();
         CloseableHttpResponse response;
         try (CloseableHttpClient client = HttpClientBuilder.create().setProxy(new HttpHost("127.0.0.1", clientPort)).build()) {
-//            response = client.execute(new HttpGet("https://www.baidu.com/"));
-            response = client.execute(new HttpGet("http://wap.baidu.com/"));
-
-
-            logger.info("response {}", response.getStatusLine());
-            logger.info(EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8));
+            for (int i = 0; i < 10; i++) {
+                response = client.execute(new HttpGet("https://www.baidu.com/"));
+                logger.info("response {}", response.getStatusLine());
+                EntityUtils.consume(response.getEntity());
+//                logger.info(EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8));
+            }
+            for (int i = 0; i < 10; i++) {//测试 Connection: Keep-Alive 长连接
+                response = client.execute(new HttpGet("http://wap.baidu.com/"));
+                logger.info("response {}", response.getStatusLine());
+                EntityUtils.consume(response.getEntity());
+//                logger.info(EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8));
+            }
         }
 
     }

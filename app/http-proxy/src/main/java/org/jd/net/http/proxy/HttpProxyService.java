@@ -1,6 +1,7 @@
 package org.jd.net.http.proxy;
 
 import io.netty.buffer.ByteBuf;
+import io.netty.buffer.CompositeByteBuf;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import org.apache.commons.lang3.StringUtils;
@@ -13,7 +14,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 
 /**
  * ====================https============================
@@ -42,8 +42,7 @@ public class HttpProxyService extends SplitHandler {
 
     private enum State {init, connect, http, body}
 
-    private ArrayList<ByteBuf> dataToServer = new ArrayList<>();//要发往服务端的数据
-
+    private CompositeByteBuf headers = Buf.alloc.compositeBuffer();//要发往服务端的头部数据
     private String host;
     private int port;
 
@@ -67,7 +66,7 @@ public class HttpProxyService extends SplitHandler {
                     int i = url.indexOf('/', 7);//端口后面的斜线的坐标
                     setServerAddr(url.substring(7, i), 80);//www.qq.com:80
                     //转换为 GET /index.html HTTP/1.1\r\n
-                    dataToServer.add(Buf.wrap(split[0], " ", url.substring(i), " ", split[2]));
+                    headers.addComponent(true, Buf.wrap(split[0], " ", url.substring(i), " ", split[2]));
                 }
                 break;
             case connect://忽略剩余请求头
@@ -86,15 +85,15 @@ public class HttpProxyService extends SplitHandler {
                             logger.info("请求头转换后 {}", Buf.toString(frame));
                         }
                     }
-                    dataToServer.add(frame);
+                    headers.addComponent(true, frame);
                 } else {//\r\n
-                    dataToServer.add(frame);//\r\n
+                    headers.addComponent(true, frame);//\r\n
                     state = State.body;
                 }
                 break;
         }
         if (state == State.body) {//剩余数据发送到服务端
-            dataToServer.add(remains.retainedSlice());
+            headers.addComponent(true, remains.retainedSlice());
             remains.release();
 
             Channel client = ctx.channel();
@@ -102,11 +101,9 @@ public class HttpProxyService extends SplitHandler {
             client.pipeline().remove(this);
 
             Netty.connect(host, port, server -> {
-                server.pipeline().addLast(Transfer.autoReadOnActive(client), Handlers.active(c -> {
-                    dataToServer.forEach(server::write);//剩余数据发送到服务端
-                    server.flush();
-                    dataToServer.clear();
-                }), Handlers.closeOnIOException);
+                server.pipeline().addLast(Transfer.autoReadOnActive(client),
+                        Handlers.active(s -> server.writeAndFlush(headers)),//头部数据发送到服务端
+                        Handlers.closeOnIOException);
                 client.pipeline().addLast(new Transfer(server));//已经有 Handlers.closeOnIOException 了
             });
         }
@@ -119,9 +116,9 @@ public class HttpProxyService extends SplitHandler {
     }
 
     @Override
-    public void channelInactive(ChannelHandlerContext ctx) throws Exception {
-        dataToServer.forEach(ByteBuf::release);
-        super.channelInactive(ctx);
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+        headers.release();
+        super.exceptionCaught(ctx, cause);
     }
 
     /**
