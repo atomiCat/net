@@ -45,19 +45,30 @@ public class KeepAliveHandler extends ChannelDuplexHandler {
         }
     }
 
+    private boolean active = true;
+
     @Override
     public void channelActive(ChannelHandlerContext ctx) throws Exception {
         this.ctx = ctx;
         new Thread(() -> {
-            try {
-                TimeUnit.SECONDS.sleep(interval);
-                write(Buf.alloc(0), null);
-                this.ctx.flush();
-            } catch (InterruptedException e) {
-                throw new RuntimeException(e);
+            while (active) {
+                try {
+                    TimeUnit.SECONDS.sleep(interval);
+                    write(Buf.alloc(0), null);
+                    this.ctx.flush();
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
             }
+
         }).start();
         super.channelActive(ctx);
+    }
+
+    @Override
+    public void channelInactive(ChannelHandlerContext ctx) throws Exception {
+        active = false;
+        super.channelInactive(ctx);
     }
 
     private ChannelHandlerContext ctx;
@@ -72,16 +83,12 @@ public class KeepAliveHandler extends ChannelDuplexHandler {
 
 
     private synchronized void write(ByteBuf data, ChannelPromise promise) {
-        try {
-            ctx.write(Buf.wrap(data.readableBytes())).sync();//写入一个大小等于 数据长度 的 int值
-            if (data.isReadable()) {
-                if (promise == null)
-                    ctx.write(data).sync();
-                else
-                    ctx.write(data, promise).sync();
-            }
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
+        ctx.write(Buf.wrap(data.readableBytes())).syncUninterruptibly();//写入一个大小等于 数据长度 的 int值
+        if (data.isReadable()) {
+            if (promise == null)
+                ctx.write(data).syncUninterruptibly();
+            else
+                ctx.write(data, promise).syncUninterruptibly();
         }
     }
 }
