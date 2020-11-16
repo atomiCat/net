@@ -14,14 +14,14 @@ public class XorCodec extends ChannelDuplexHandler {
     }
 
     @Override
-    public synchronized void channelRead(ChannelHandlerContext ctx, Object msg) {
+    public void channelRead(ChannelHandlerContext ctx, Object msg) {
         ByteBuf buf = (ByteBuf) msg;
         decodeIndex = codec(buf, decodeIndex);
         ctx.fireChannelRead(buf);
     }
 
     @Override
-    public synchronized void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) {
+    public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) {
         ByteBuf buf = (ByteBuf) msg;
         encodeIndex = codec(buf, encodeIndex);
         ctx.write(buf, promise);
