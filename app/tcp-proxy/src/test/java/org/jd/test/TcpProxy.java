@@ -1,5 +1,8 @@
 package org.jd.test;
 
+import io.netty.buffer.ByteBuf;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.util.ResourceLeakDetector;
 import org.jd.net.netty.Buf;
 import org.jd.net.netty.Netty;
@@ -11,42 +14,56 @@ import org.slf4j.LoggerFactory;
 
 
 public class TcpProxy {
-    Logger logger = LoggerFactory.getLogger(TcpProxy.class);
+    static Logger logger = LoggerFactory.getLogger(TcpProxy.class);
 
     @Test
     public void test() throws InterruptedException {
         ResourceLeakDetector.setLevel(ResourceLeakDetector.Level.PARANOID);//设置资源泄露检查等级：最高等级
 
-        Main.start(1111, "127.0.0.1", 2222);
-        Main.start(2222, "127.0.0.1", 3333);
-        Main.start(3333, "127.0.0.1", 4444);
-        Main.start(4444, "127.0.0.1", 5555);
-        Main.start(5555, "127.0.0.1", 6666);
-        Main.start(6666, "127.0.0.1", 7777);
-        Main.start(7777, "127.0.0.1", 8888);
-        Main.start(8888, "127.0.0.1", 9999);
+        Main.start("0.0.0.0", 1111, "127.0.0.1", 2222);
 
-        Netty.accept(9999, channel -> channel.pipeline().addLast(Handlers.read((ch, buf) -> {
-            int l = buf.readInt();
-            buf.writeInt(l + 1);
-            ch.writeAndFlush(buf);
 
-            if (l > 1000) {
-                logger.info("count={} ", l);
-                ch.close();
-            }
-        })));
-
-        Netty.connect("127.0.0.1", 1111, channel -> channel.pipeline().addLast(Handlers.active(context -> {
+        Netty.accept(2222, channel -> channel.pipeline().addLast(Handlers.active(context -> {
             logger.info("active ");
-            context.writeAndFlush(Buf.wrap(1));
-        }), Handlers.read((ch, buf) -> {
-            int l = buf.readInt();
-            buf.writeInt(l + 1);
-            ch.writeAndFlush(buf);
+            ByteBuf buf = Buf.alloc(1024);
+            buf.writeInt(1);
+            //用负数填充
+            while (buf.isWritable())
+                buf.writeByte(-1);
+            context.writeAndFlush(buf);
+        }), new TestHandler()));
 
+        Netty.connect("127.0.0.1", 1111, channel -> channel.pipeline().addLast(new TestHandler()))
+                .channel().closeFuture().sync();
+        logger.info("end");
+    }
 
-        }))).channel().closeFuture().sync();
-        logger.info("end ");
+    /**
+     * 读到数据时，将第一个int数字自增1后，剩余数据原封不动写回
+     */
+    static class TestHandler extends ChannelInboundHandlerAdapter {
+        long startTime = System.currentTimeMillis();
+
+        @Override
+        public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+            ByteBuf buf = (ByteBuf) msg;
+            //第一个数自增1
+            int num = buf.getInt(0);
+            if (num < 0)
+                throw new IllegalStateException("buf.readableBytes = " + buf.readableBytes());
+            buf.setInt(0, num + 1);
+
+            if (num >= 30000) {//停止条件
+                long byteLen = buf.readableBytes();
+                long cost = System.currentTimeMillis() - startTime;
+                logger.info("IO读写次数{} 单次传输{}字节 耗时{}ms", num, byteLen, cost);
+                logger.info("传输总数据量{}字节, 速度{}字节每秒", byteLen * num, byteLen * num * 1000 / cost);
+                ctx.close();
+                buf.release();
+                return;
+            }
+
+            ctx.writeAndFlush(buf);
+        }
     }
 }
