@@ -1,8 +1,8 @@
 package org.jd.net.tcp.proxy;
 
 import io.netty.channel.ChannelFuture;
-import org.jd.net.netty.handler.Handlers;
 import org.jd.net.netty.Netty;
+import org.jd.net.netty.handler.Handlers;
 import org.jd.net.netty.handler.Transfer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -42,29 +42,32 @@ public class Main {
             if (c < '0' || c > '9')
                 return;
 
-            String[] s = line.split(" ");
-            if (s.length == 3)
-                start(Integer.valueOf(s[0]), s[1], Integer.valueOf(s[2]));
+            String[] p = line.split(" ");
+            if (p.length == 3)
+                start("0.0.0.0", Integer.valueOf(p[0]), p[1], Integer.valueOf(p[2]));
+            else if (p.length == 4)
+                start(p[0], Integer.valueOf(p[1]), p[2], Integer.valueOf(p[3]));
         });
         reader.close();
     }
 
     /**
-     * @param listenPort 本机监听端口
+     * @param listenHost 本机监听host
+     * @param listenPort 本机监听port
      * @param host       被代理host
      * @param port       被代理port
      * @return
      */
-    public static ChannelFuture start(int listenPort, String host, int port) {
-        logger.info("启动tcp代理：{} --> {}:{}", listenPort, host, port);
-        return Netty.accept(listenPort, client -> {
-            logger.info("accepted({}): {}", listenPort, client.remoteAddress());
+    public static ChannelFuture start(String listenHost, int listenPort, String host, int port) {
+        logger.info("启动tcp代理：{}:{} --> {}:{}", listenHost, listenPort, host, port);
+        return Netty.accept(listenHost, listenPort, client -> {
+            logger.info("accepted({}): {}",client.localAddress(), client.remoteAddress());
             client.config().setAutoRead(false);//暂停自动读，等连接被代理端成功再继续读
             Netty.connect(host, port, target -> {
                 target.pipeline().addLast(Transfer.autoReadOnActive(client), Handlers.closeOnIOException);
                 client.pipeline().addLast(new Transfer(target), Handlers.closeOnIOException);
             }).addListener(future -> {
-                    if (!future.isSuccess()) {
+                if (!future.isSuccess()) {
                     logger.info("连接失败，关闭 client {} 的连接", client.remoteAddress());
                     client.close();
                 }

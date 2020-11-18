@@ -80,7 +80,7 @@ public class Netty {
      * @param childHandler
      * @return
      */
-    public static ChannelFuture accept(int port, ChannelHandler childHandler) {
+    public static ChannelFuture accept(String host, int port, ChannelHandler childHandler) {
 
         EventLoopGroup bossGroup = new NioEventLoopGroup(2);
         EventLoopGroup workerGroup = new NioEventLoopGroup(4);
@@ -89,7 +89,7 @@ public class Netty {
                 .channel(NioServerSocketChannel.class)
                 .childHandler(childHandler);
 
-        ChannelFuture bindFuture = b.bind(port);
+        ChannelFuture bindFuture = b.bind(host, port);
         bindFuture.addListener(future -> {
             if (future.isSuccess()) {
                 bindFuture.channel().closeFuture().addListener(close -> {
@@ -107,13 +107,21 @@ public class Netty {
     }
 
     /**
-     *
      * @param port
      * @param childInitializer
      * @return
      */
+    public static ChannelFuture accept(String host, int port, Consumer<Channel> childInitializer) {
+        return accept(host, port, new ChannelInitializer<Channel>() {
+            @Override
+            protected void initChannel(Channel ch) {
+                childInitializer.accept(ch);
+            }
+        });
+    }
+
     public static ChannelFuture accept(int port, Consumer<Channel> childInitializer) {
-        return accept(port, new ChannelInitializer<Channel>() {
+        return accept("0.0.0.0", port, new ChannelInitializer<Channel>() {
             @Override
             protected void initChannel(Channel ch) {
                 childInitializer.accept(ch);
