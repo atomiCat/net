@@ -1,6 +1,7 @@
 package org.jd.net.test;
 
 
+import io.netty.channel.ChannelDuplexHandler;
 import io.netty.util.ResourceLeakDetector;
 import org.apache.http.HttpHost;
 import org.apache.http.client.methods.CloseableHttpResponse;
@@ -9,12 +10,14 @@ import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.util.EntityUtils;
 import org.jd.net.http.proxy.Main;
+import org.jd.net.http.proxy.XorCodec;
 import org.junit.Before;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.function.Supplier;
 
 public class HttpProxyTest {
     private Logger logger = LoggerFactory.getLogger(HttpProxyTest.class);
@@ -32,8 +35,10 @@ public class HttpProxyTest {
 
     @Test
     public void testClient() throws IOException {
-        new Thread(() -> Main.serverStart(serverPort, password)).start();
-        new Thread(() -> Main.clientStart(clientPort, "127.0.0.1", serverPort, password)).start();
+
+        Supplier<ChannelDuplexHandler> codecSupplier = () -> new XorCodec(Main.genPassword(password));
+        new Thread(() -> Main.serverStart(serverPort, codecSupplier)).start();
+        new Thread(() -> Main.clientStart(clientPort, "127.0.0.1", serverPort, codecSupplier)).start();
         CloseableHttpResponse response;
         try (CloseableHttpClient client = HttpClientBuilder.create().setProxy(new HttpHost("127.0.0.1", clientPort)).build()) {
             for (int i = 0; i < 10; i++) {
@@ -54,7 +59,7 @@ public class HttpProxyTest {
 
     @Test
     public void testServer() {
-        Main.serverStart(serverPort, password);
+        Main.serverStart(serverPort, null);
     }
 
 }
