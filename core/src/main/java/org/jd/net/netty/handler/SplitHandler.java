@@ -10,6 +10,10 @@ import java.nio.charset.StandardCharsets;
 
 /**
  * 按照指定分隔符分割数据
+ * 与{@link io.netty.handler.codec.DelimiterBasedFrameDecoder}的区别:
+ * 1.分割完的帧包含分隔符
+ * 2.分割出一帧时后面可能还有剩余数据，若想对剩余数据继续处理可以重写{@link SplitHandler#decodeFrame}方法
+ * 3.代码量少,逻辑简单，内存占用少，效率高（待考证）
  */
 public class SplitHandler extends ChannelInboundHandlerAdapter {
     private final byte[] separator;//分隔符
@@ -36,10 +40,6 @@ public class SplitHandler extends ChannelInboundHandlerAdapter {
 
     /**
      * 分割数据
-     *
-     * @param ctx
-     * @param buffer
-     * @throws Exception
      */
     protected void split(ChannelHandlerContext ctx, ByteBuf buffer) throws Exception {
         int iEnd = findIndexOfSeparatorEnd(buffer, buffer.readerIndex());

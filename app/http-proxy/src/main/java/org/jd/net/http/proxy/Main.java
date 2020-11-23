@@ -15,13 +15,13 @@ public class Main {
     private static Logger logger = LoggerFactory.getLogger(Main.class);
 
     /**
-     * 启动server端：
-     * 启动client端：
+     * 启动server端：-s port [password]
+     * 启动client端：port serverHost serverPort [password]
      */
     public static void main(String[] a) {
         if ("-s".equalsIgnoreCase(a[0])) {// -s port [password]
             serverStart(Integer.valueOf(a[1]), a.length > 2 ? () -> new AESCodec(a[2]) : null);
-        } else {// port serverHost serverPort password
+        } else {// port serverHost serverPort [password]
             clientStart(Integer.valueOf(a[0]), a[1], Integer.valueOf(a[2]), a.length > 3 ? () -> new AESCodec(a[3]) : null);
         }
     }
@@ -70,6 +70,5 @@ public class Main {
         channel.config().setOption(ChannelOption.SO_SNDBUF, 1024 * 512);
         channel.closeFuture().syncUninterruptibly();
     }
-
 
 }
