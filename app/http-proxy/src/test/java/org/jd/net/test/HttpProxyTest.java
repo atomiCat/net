@@ -36,7 +36,7 @@ public class HttpProxyTest {
     @Test
     public void testClient() throws IOException {
 
-        Supplier<ChannelDuplexHandler> codecSupplier = () -> new XorCodec(Main.genPassword(password));
+        Supplier<ChannelDuplexHandler> codecSupplier = () -> new XorCodec(password);
         new Thread(() -> Main.serverStart(serverPort, codecSupplier)).start();
         new Thread(() -> Main.clientStart(clientPort, "127.0.0.1", serverPort, codecSupplier)).start();
         CloseableHttpResponse response;
