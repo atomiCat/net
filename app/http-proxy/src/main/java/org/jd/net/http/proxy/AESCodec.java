@@ -54,7 +54,7 @@ public class AESCodec extends ChannelDuplexHandler {
     public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
         //每一段完整的密文前都有一个 int 值表示该段密文长度，使用 LengthFieldBasedFrameDecoder 来保证读到的密文完整性
         ctx.pipeline().addBefore(ctx.name(), "LengthFieldBasedFrameDecoder",
-                new LengthFieldBasedFrameDecoder(Integer.MAX_VALUE, 0, 4));
+                new LengthFieldBasedFrameDecoder(Integer.MAX_VALUE, 0, 4, 0, 4));
         super.handlerAdded(ctx);
     }
 
