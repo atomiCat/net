@@ -20,9 +20,9 @@ public class Main {
      */
     public static void main(String[] a) {
         if ("-s".equalsIgnoreCase(a[0])) {// -s port [password]
-            serverStart(Integer.valueOf(a[1]), a.length > 2 ? () -> new XorCodec(a[2]) : null);
+            serverStart(Integer.valueOf(a[1]), a.length > 2 ? () -> new AESCodec(a[2]) : null);
         } else {// port serverHost serverPort password
-            clientStart(Integer.valueOf(a[0]), a[1], Integer.valueOf(a[2]), a.length > 3 ? () -> new XorCodec(a[3]) : null);
+            clientStart(Integer.valueOf(a[0]), a[1], Integer.valueOf(a[2]), a.length > 3 ? () -> new AESCodec(a[3]) : null);
         }
     }
 

@@ -4,6 +4,7 @@ import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
+import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
 import org.jd.net.netty.Buf;
 
 import javax.crypto.Cipher;
@@ -32,64 +33,53 @@ public class AESCodec extends ChannelDuplexHandler {
 
     }
 
-    private Cipher decoder;
-
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws GeneralSecurityException {
-        ByteBuf buf = (ByteBuf) msg;
-        if (decoder == null)
-            decoder = init(Cipher.DECRYPT_MODE);
-
+        ByteBuf out = codec((ByteBuf) msg, Cipher.DECRYPT_MODE);
+        ctx.fireChannelRead(out);
     }
 
-    private Cipher encoder;
-
-    /**
-     *
-     */
     @Override
     public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws GeneralSecurityException {
-        ByteBuf buf = (ByteBuf) msg;
-        if (encoder == null)
-            encoder = init(Cipher.ENCRYPT_MODE);
-        ByteBuf out = Buf.alloc(buf.readableBytes() + 4);
-        out.setInt(0, buf.readableBytes());
-
-        ByteBuffer outBuffer = out.nioBuffer();
-        outBuffer.clear();
-        outBuffer.position()
-        encoder.doFinal(buf.nioBuffer(), );
+        ByteBuf out = codec((ByteBuf) msg, Cipher.ENCRYPT_MODE);
+        ctx.write(Buf.wrap(out.readableBytes()));//写入一个int值表示密文长度
+        ctx.write(out, promise);
     }
+
+    @Override
+    public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
+        //每一段完整的密文前都有一个 int 值表示该段密文长度，使用 LengthFieldBasedFrameDecoder 来保证读到的密文完整性
+        ctx.pipeline().addBefore(ctx.name(), "LengthFieldBasedFrameDecoder",
+                new LengthFieldBasedFrameDecoder(Integer.MAX_VALUE, 0, 4));
+        super.handlerAdded(ctx);
+    }
+
+    private final Cipher[] codec = new Cipher[3];//codec[1]为编码器;codec[2]为解码器
 
     /**
-     * 初始化 Cipher
+     * 数据编解码
+     *
+     * @param in     输入数据
+     * @param opMode 编解码模式，必须为 {@link Cipher#ENCRYPT_MODE} 或 {@link Cipher#DECRYPT_MODE}
+     * @return output
      */
-    private Cipher init(int opmode) throws GeneralSecurityException {
-        Cipher c = Cipher.getInstance("AES/ECB/PKCS5Padding");
-        c.init(opmode, new SecretKeySpec(key, "AES"));
-        return c;
+    public ByteBuf codec(ByteBuf in, int opMode) throws GeneralSecurityException {
+        if (codec[opMode] == null) {//初始化 Cipher
+            codec[opMode] = Cipher.getInstance("AES/ECB/PKCS5Padding");
+            codec[opMode].init(opMode, new SecretKeySpec(key, "AES"));
+        }
+
+        int paddingSize = opMode == Cipher.ENCRYPT_MODE ? 16 : 0;//加密时明文需要补齐，解密无需补齐
+        ByteBuf outBuf = Buf.alloc(in.readableBytes() + paddingSize);
+        ByteBuffer outBuffer = outBuf.nioBuffer(0, outBuf.capacity());
+        codec[opMode].doFinal(in.nioBuffer(), outBuffer);//编码
+        outBuf.writerIndex(outBuffer.position());//编码后的长度
+//        log.info("{} in:{} out:{}", opMode == Cipher.ENCRYPT_MODE ? "加密" : "解密", in.readableBytes(), outBuf.readableBytes());
+        in.release();
+        return outBuf;
     }
 
-//    static Logger log = LoggerFactory.getLogger("");
+//    private static final Logger log = LoggerFactory.getLogger(AESCodec.class);
 
-//    public static void main(String[] a) throws Exception {
-//        byte[] text = new byte[15];
-//        byte[] key = new byte[16];
-//        Cipher c = Cipher.getInstance("AES/ECB/PKCS5Padding");
-//        SecretKey deskey = new SecretKeySpec(key, "AES");
-//        c.init(Cipher.ENCRYPT_MODE, deskey);
-//        log.info("开始加密");
-//        byte[] bytes = c.doFinal(text);//加密
-//        log.info("加密完毕 {}", bytes.length);
-//
-//        Cipher c2 = Cipher.getInstance("AES/ECB/PKCS5Padding");
-//        SecretKey deskey2 = new SecretKeySpec(key, "AES");
-//        c2.init(Cipher.DECRYPT_MODE, deskey2);
-//        log.info("开始解密");
-//        byte[] bytes1 = c2.doFinal(bytes);
-//        log.info("解密完毕");
-//        System.out.println("ok");
-//
-//
-//    }
+
 }
