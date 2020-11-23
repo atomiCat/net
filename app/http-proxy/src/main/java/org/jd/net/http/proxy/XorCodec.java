@@ -10,6 +10,9 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.HashMap;
 
+/**
+ * 异或加解密，根据给定字符串生成1024字节密钥，与明文数据异或。
+ */
 public class XorCodec extends ChannelDuplexHandler {
     /**
      * 通过明文密钥不断MD5生成一个长字节数组用来异或加解密

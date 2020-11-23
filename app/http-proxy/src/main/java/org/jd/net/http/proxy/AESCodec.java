@@ -15,6 +15,10 @@ import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
 import java.util.Arrays;
 
+/**
+ * AES加解密，根据给定字符串生成16字节128位密钥，进行AES加解密
+ * 加密模式ECB 填充模式PKCS5Padding
+ */
 public class AESCodec extends ChannelDuplexHandler {
     private final byte[] key;
 
