@@ -14,7 +14,6 @@
     <modules>
         <module>tcp-proxy</module>
         <module>http-proxy</module>
-        <module>tcp-udp-tcp</module>
         <module>tcp-bridge</module>
     </modules>
 
