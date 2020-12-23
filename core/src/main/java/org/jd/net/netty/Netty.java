@@ -15,6 +15,20 @@ import java.util.function.Consumer;
 public class Netty {
     private static Logger logger = LoggerFactory.getLogger(Netty.class);
 
+    public static void setDefaultUncaughtExceptionHandler() {
+        Thread.setDefaultUncaughtExceptionHandler((t, e) -> printError(e, "thread :" + t.getName() + " cause by "));
+    }
+
+    private static void printError(Throwable t, String tag) {
+        for (; t != null; t = t.getCause()) {
+            logger.error(tag + ":{} :{} ", t.getClass().getName(), t.getMessage());
+            t.printStackTrace();
+            for (Throwable sup : t.getSuppressed()) {
+                printError(sup, tag + " suppressed ");
+            }
+        }
+    }
+
     /**
      * connect
      *
