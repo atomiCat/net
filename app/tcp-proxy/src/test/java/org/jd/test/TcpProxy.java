@@ -12,9 +12,17 @@ import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.concurrent.TimeUnit;
+
 
 public class TcpProxy {
     static Logger logger = LoggerFactory.getLogger(TcpProxy.class);
+
+    @Test
+    public void start() throws InterruptedException {
+        Main.start("0.0.0.0", 8000, "127.0.0.1", 50586);
+        TimeUnit.DAYS.sleep(1);
+    }
 
     @Test
     public void test() throws InterruptedException {
