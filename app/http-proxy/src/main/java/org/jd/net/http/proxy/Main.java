@@ -24,7 +24,7 @@ public class Main {
         } else if (a != null && a.length >= 3) {// port serverHost serverPort [password]
             clientStart(Integer.valueOf(a[0]), a[1], Integer.valueOf(a[2]), a.length > 3 ? () -> new AESCodec(a[3]) : null);
         } else {
-            System.out.println("usage:\njava -jar -s port [password] \n or:\njava -jar port serverHost serverPort [password]");
+            System.out.println("usage:\njava -jar -s port [password] \nor:\njava -jar port serverHost serverPort [password]");
         }
     }
 
